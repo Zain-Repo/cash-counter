@@ -18,6 +18,9 @@ git tag -a vX.Y.Z -m "Cash Counter X.Y.Z"
 git push origin vX.Y.Z
 ```
 
+CI also validates installer creation through the reusable package workflow, so
+packaging failures are caught before tagging. Release uses the same package job.
+
 The Release workflow independently repeats all checks for the tagged commit,
 verifies the version, builds a Windows x64 installer and dependency notices,
 and uploads an Actions artifact. A separate job with `contents: write` verifies

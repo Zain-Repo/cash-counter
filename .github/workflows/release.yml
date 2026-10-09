@@ -16,47 +16,8 @@ jobs:
     uses: ./.github/workflows/checks.yml
 
   package:
-    name: Package Windows release
     needs: checks
-    runs-on: windows-2025
-    timeout-minutes: 60
-    defaults:
-      run:
-        shell: pwsh
-    env:
-      CARGO_TERM_COLOR: always
-      CARGO_INCREMENTAL: '0'
-    steps:
-      - name: Check out the tested tag
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install the repository toolchain
-        run: |
-          rustup show active-toolchain
-          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain setup failed.' }
-      - name: Cache registry downloads
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/registry/src
-          key: windows-release-registry-${{ hashFiles('Cargo.lock') }}
-      - name: Build installer and release files
-        run: ./packaging/windows/build-installer.ps1
-      - name: Preserve release files
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: windows-release
-          path: |
-            dist/Till-*-windows-x64-setup.exe
-            dist/LICENSE
-            dist/THIRD_PARTY_NOTICES.md
-            dist/THIRD_PARTY_LICENSES.txt
-            dist/SHA256SUMS.txt
-          if-no-files-found: error
-          retention-days: 14
+    uses: ./.github/workflows/package.yml
 
   publish:
     name: Publish tested release

@@ -91,7 +91,7 @@ runtime redistribution, icon generation and verification.
 ## CI and releases
 
 GitHub Actions checks formatting, all targets, Clippy and the complete test
-suite on Windows for pushes and pull requests. Pushing a `vX.Y.Z` tag reruns
+suite and builds the Windows installer for pushes and pull requests. Pushing a `vX.Y.Z` tag reruns
 those checks, verifies that the tag matches `Cargo.toml`, builds the installer,
 and publishes it with license notices and SHA-256 checksums only after success.
 Actions are pinned to reviewed commit SHAs; Dependabot checks for updates weekly.

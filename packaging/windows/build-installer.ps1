@@ -31,7 +31,10 @@ if (-not $VcRuntimePath) {
     $visualStudioRoot = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
     if ($LASTEXITCODE -ne 0 -or -not $visualStudioRoot) { throw 'Unable to locate Visual Studio C++ Build Tools.' }
     $redistVersion = (Get-Content -LiteralPath (Join-Path $visualStudioRoot 'VC/Auxiliary/Build/Microsoft.VCRedistVersion.default.txt') -Raw).Trim()
-    $VcRuntimePath = Join-Path $visualStudioRoot "VC/Redist/MSVC/$redistVersion/x64/Microsoft.VC143.CRT/vcruntime140.dll"
+    $runtimeRoot = Join-Path $visualStudioRoot "VC/Redist/MSVC/$redistVersion/x64"
+    $runtimeCandidates = @(Get-ChildItem -Path (Join-Path $runtimeRoot 'Microsoft.VC*.CRT/vcruntime140.dll') -File)
+    if ($runtimeCandidates.Count -ne 1) { throw 'Unable to identify one default x64 Visual C++ redistributable DLL.' }
+    $VcRuntimePath = $runtimeCandidates[0].FullName
 }
 if (-not (Test-Path -LiteralPath $VcRuntimePath)) {
     throw 'The Visual C++ x64 redistributable vcruntime140.dll is missing. Install the C++ redistributable SDK component or supply -VcRuntimePath.'
