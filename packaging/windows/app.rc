@@ -16,11 +16,11 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "FileDescription", "Till - Cash Register\0"
+            VALUE "FileDescription", "Cash Ledger - Cash Register\0"
             VALUE "FileVersion", "@VERSION@\0"
             VALUE "InternalName", "cash-counter\0"
             VALUE "OriginalFilename", "cash-counter.exe\0"
-            VALUE "ProductName", "Till\0"
+            VALUE "ProductName", "Cash Ledger\0"
             VALUE "ProductVersion", "@VERSION@\0"
         END
     END

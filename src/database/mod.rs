@@ -167,6 +167,11 @@ pub struct Database {
 }
 
 impl Database {
+    /// Allows the reporting module to read a consistent ledger snapshot.
+    pub(crate) fn report_connection(&self) -> &Connection {
+        &self.connection
+    }
+
     /// Finds the register's open session using the partial unique index.
     pub fn active_session(&self, register: i64) -> Result<Option<Session>> {
         self.connection.query_row(

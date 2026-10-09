@@ -21,6 +21,12 @@ fallbacks. Controls reuse the library's interaction and focus behavior.
 
 ## Workflow
 
+Company setup creates a local administrator account on first use. Subsequent
+launches open the login page, and the ledger workspace loads after authentication.
+Settings and Reports are available from the workspace navigation. See the
+[company and reporting guide](company-and-reports.md) for configuration, exports,
+printing, and the limits of local authentication.
+
 1. Create a register by name. New registers use CAD.
 2. Open a day. The date defaults to the computer's local date and remains
    editable in `YYYY-MM-DD` format. Enter an explicit opening count.

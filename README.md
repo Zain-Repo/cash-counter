@@ -1,14 +1,14 @@
-# Cash Counter
+# Cash Ledger
 
 [![CI](https://github.com/Zain-Repo/cash-counter/actions/workflows/ci.yml/badge.svg)](https://github.com/Zain-Repo/cash-counter/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Zain-Repo/cash-counter)](https://github.com/Zain-Repo/cash-counter/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Cash Counter is a native desktop cash-register app built with Rust, GPUI and
-SQLite. The workspace is called **Till**: open a register day, record cash
+Cash Ledger is a native desktop cash-register app built with Rust, GPUI and
+SQLite. Open a register day, record cash
 movements, and reconcile the physical count before closing.
 
-<img src="assets/till.png" alt="Till application icon" width="96" height="96">
+<img src="assets/till.png" alt="Cash Ledger application icon" width="96" height="96">
 
 ## What it does
 
@@ -18,10 +18,13 @@ movements, and reconcile the physical count before closing.
 - Compare the physical count with the expected balance before closing a day.
 - Persist records locally in SQLite, with transactional writes and duplicate
   submission protection.
+- Set up a company profile and local administrator account, then sign in before
+  accessing the register workspace.
+- Configure company rules and printing, and generate date-range ledger reports.
 
 ## Install on Windows
 
-Download `Till-<version>-windows-x64-setup.exe` from
+Download `CashLedger-<version>-windows-x64-setup.exe` from
 [Releases](https://github.com/Zain-Repo/cash-counter/releases/latest).
 The installer supports Windows 10 version 1703 or later and Windows 11 x64,
 requires no administrator privileges, and includes the required Visual C++
@@ -30,20 +33,22 @@ runtime. It creates a Start Menu shortcut and offers an optional desktop shortcu
 The release includes `SHA256SUMS.txt`. To check a download in PowerShell:
 
 ```powershell
-Get-FileHash ./Till-0.0.1-windows-x64-setup.exe -Algorithm SHA256
+Get-FileHash ./CashLedger-0.0.1-windows-x64-setup.exe -Algorithm SHA256
 ```
 
 Compare the result with the corresponding line in `SHA256SUMS.txt`.
 Installers are currently unsigned. Uninstall removes the application and its
 shortcuts while preserving the register database.
 
-## Use Till
+## Use Cash Ledger
 
-1. Create a register.
-2. Open a day with the business date and opening cash count.
-3. Add cash-in or cash-out movements with an amount and reason.
-4. Review saved days and movement history; Refresh reloads changes from another instance.
-5. Enter the physical closing count, review the difference, then confirm closure.
+1. Complete company setup and create your administrator username and password.
+   Subsequent launches start at the login page.
+2. Create a register.
+3. Open a day with the business date and opening cash count.
+4. Add cash-in or cash-out movements with an amount and reason.
+5. Review saved days and movement history; Refresh reloads changes from another instance.
+6. Enter the physical closing count, review the difference, then confirm closure.
 
 Ctrl+Enter submits the current form; Escape cancels an auxiliary form.
 Closing requires the explicit review stage. Closed days are read-only.
@@ -57,7 +62,9 @@ Back up the database when the application is closed.
 For development smoke tests, `CASH_REGISTER_DB` can point to an isolated database.
 
 The initial version supports CAD with two decimal places. Multi-currency setup,
-denomination counting, cloud sync and user accounts are not implemented.
+denomination counting and cloud sync are not implemented. Accounts are local to
+the database; signing in does not encrypt the database or restrict access by
+other software running under your Windows account.
 An upstream Windows accessibility issue can cause a shutdown panic with active
 accessibility clients; details are in the [UI guide](docs/ui.md).
 Windows is the supported release target; Linux and macOS releases are not validated.
@@ -101,13 +108,15 @@ See [the release guide](docs/releases.md) for the versioning procedure.
 
 - [Storage API and database invariants](docs/database.md)
 - [Workspace behavior and known limitations](docs/ui.md)
+- [Company setup, sign-in, settings, reports and printing](docs/company-and-reports.md)
+- [Automatic and manual application updates](docs/updating.md)
 - [GPUI development guide](docs/gpui/README.md)
 - [Windows packaging](docs/windows-packaging.md)
 - [Release process](docs/releases.md)
 
 ## License
 
-Cash Counter's source code and authored icon are available under the
+Cash Ledger's source code and authored icon are available under the
 [MIT License](LICENSE). Third-party libraries, assets and the Microsoft runtime
 retain their respective licenses. Release packages include dependency notices;
 see [third-party attribution](THIRD_PARTY_NOTICES.md).

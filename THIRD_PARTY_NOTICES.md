@@ -1,7 +1,7 @@
 # Third-party attribution
 
-The MIT license in this repository covers Cash Counter's authored code,
-documentation and Till icon. It does not replace third-party licenses.
+The MIT license in this repository covers Cash Ledger's authored code,
+documentation and application icon. It does not replace third-party licenses.
 
 - GPUI (`gpui-unofficial`) and its platform packages are community distributions
   of Zed's GPUI framework, licensed Apache-2.0.

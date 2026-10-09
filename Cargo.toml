@@ -9,6 +9,13 @@ readme = "README.md"
 publish = false
 
 [dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+semver = "1"
+sha2 = "0.10"
+argon2 = "0.5.3"
+rand_core = { version = "0.6", features = ["getrandom"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 gpui-component = { package = "gpui-component-uo", version = "=1.19.0-pre" }
 gpui-component-assets = { package = "gpui-component-assets-uo", version = "=1.19.0-pre" }
@@ -29,6 +36,9 @@ tinyvec = "=1.12.0"
 [dev-dependencies]
 tempfile = "3"
 gpui-unofficial = { version = "=1.19.0-pre", features = ["test-support"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Graphics_Gdi", "Win32_Foundation", "Win32_Storage_Xps", "Win32_Graphics_Printing", "Win32_System_Threading", "Win32_Security"] }
 
 [build-dependencies]
 embed-resource = "=3.0.12"

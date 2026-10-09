@@ -43,7 +43,7 @@ jobs:
         with:
           name: windows-release
           path: |
-            dist/Till-*-windows-x64-setup.exe
+            dist/CashLedger-*-windows-x64-setup.exe
             dist/LICENSE
             dist/THIRD_PARTY_NOTICES.md
             dist/THIRD_PARTY_LICENSES.txt

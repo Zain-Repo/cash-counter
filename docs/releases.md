@@ -1,7 +1,7 @@
 # Release process
 
 The first public version is `0.0.1`. Release tags use `vX.Y.Z` and must match
-`Cargo.toml`. The product and installer are named Till; the Rust package and
+`Cargo.toml`. The product and installer are named Cash Ledger; the Rust package and
 repository are named `cash-counter`.
 
 ## Publish a version
@@ -14,7 +14,7 @@ repository are named `cash-counter`.
 5. Create an annotated tag and push it:
 
 ```sh
-git tag -a vX.Y.Z -m "Cash Counter X.Y.Z"
+git tag -a vX.Y.Z -m "Cash Ledger X.Y.Z"
 git push origin vX.Y.Z
 ```
 

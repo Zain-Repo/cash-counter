@@ -17,12 +17,57 @@ const GREEN: u32 = 0x265746;
 
 impl Render for RegisterApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.access != Access::Authenticated {
+            return div()
+                .size_full()
+                .bg(rgb(CANVAS))
+                .font_family("Candara")
+                .text_color(rgb(INK))
+                .key_context("CashRegister")
+                .on_action(
+                    cx.listener(|this, _: &SubmitForm, window, cx| this.submit_access(window, cx)),
+                )
+                .child(self.access_view(cx))
+                .into_any_element();
+        }
+        if self.page != Page::Register {
+            let page = if self.page == Page::Settings {
+                self.settings_view(cx)
+            } else {
+                self.reports_view(cx)
+            };
+            return v_flex()
+                .key_context("CashRegister")
+                .on_action(cx.listener(|this, _: &SubmitForm, window, cx| {
+                    if this.page == Page::Settings {
+                        this.save_settings(window, cx);
+                    } else {
+                        this.generate_report(window, cx);
+                    }
+                }))
+                .on_action(cx.listener(|this, _: &CancelForm, _, cx| {
+                    if !this.busy {
+                        this.page = Page::Register;
+                        cx.notify();
+                    }
+                }))
+                .size_full()
+                .bg(rgb(CANVAS))
+                .font_family("Candara")
+                .text_color(rgb(INK))
+                .child(self.navigation(cx))
+                .child(self.update_banner())
+                .child(page)
+                .into_any_element();
+        }
         let wide = window.viewport_size().width >= px(1120.);
         let blocked = self.busy || self.failed_operation.is_some();
         let content = v_flex()
             .flex_1()
             .min_w_0()
             .size_full()
+            .child(self.navigation(cx))
+            .child(self.update_banner())
             .child(self.header(cx))
             .child(self.feedback(cx))
             .child(self.summary())
@@ -74,6 +119,7 @@ impl Render for RegisterApp {
             .text_size(px(14.))
             .child(self.sidebar(cx))
             .child(content)
+            .into_any_element()
     }
 }
 
@@ -251,7 +297,7 @@ impl RegisterApp {
     }
 }
 
-fn input_field(
+pub(super) fn input_field(
     label: &'static str,
     state: &Entity<InputState>,
     disabled: bool,
@@ -301,7 +347,7 @@ impl RegisterApp {
                                 div()
                                     .text_lg()
                                     .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Till"),
+                                    .child("Cash Ledger"),
                             )
                             .child(
                                 div()
@@ -750,7 +796,13 @@ impl RegisterApp {
                             ))
                             .child(div().text_sm().text_color(rgb(MUTED)).child(
                                 "Closing is final. New movements cannot be added to this day.",
-                            )),
+                            ))
+                            .when(self.profile.as_ref().is_some_and(|profile| counted.checked_sub(expected).is_some_and(|difference| difference.unsigned_abs() > profile.closing_variance_threshold_cents as u64)), |element| {
+                                element.child(div().id("variance-warning").role(Role::Alert).text_color(rgb(0x9b3030)).child("The count difference exceeds your company's warning amount. Check the count before confirming."))
+                            })
+                            .when_some(self.profile.as_ref().filter(|profile| !profile.rules.is_empty()), |element, profile| {
+                                element.child(div().text_sm().child(format!("Company rules: {}", profile.rules)))
+                            }),
                     );
                 }
             }

@@ -29,6 +29,6 @@ fn main() {
         // Fail the build rather than silently shipping without the application identity.
         embed_resource::compile(&resource, embed_resource::NONE)
             .manifest_required()
-            .expect("failed to compile Till's Windows resources");
+            .expect("failed to compile Cash Ledger's Windows resources");
     }
 }

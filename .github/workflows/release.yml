@@ -48,6 +48,6 @@ jobs:
             test "$(jq -r .isDraft "$RUNNER_TEMP/release.json")" = true
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --draft --title "Cash Counter ${GITHUB_REF_NAME}" --notes-file "$notes"
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --draft --title "Cash Ledger ${GITHUB_REF_NAME}" --notes-file "$notes"
           fi
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest

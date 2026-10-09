@@ -10,6 +10,21 @@ use gpui_component::{Root, Theme, ThemeMode};
 use gpui_component_assets::Assets;
 
 fn main() {
+    match cash_counter::updater::handle_update_args() {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(_) => {
+            // The helper records failures for the next GUI launch.
+            return;
+        }
+    }
+    let _app_presence = match cash_counter::updater::hold_app_mutex() {
+        Ok(presence) => presence,
+        Err(_) => {
+            eprintln!("Unable to establish the application update guard.");
+            return;
+        }
+    };
     gpui_platform::application().with_assets(Assets).run(|cx| {
         gpui_component::init(cx);
         Theme::change(ThemeMode::Light, None, cx);
@@ -32,7 +47,7 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 window_min_size: Some(size(px(860.), px(640.))),
                 titlebar: Some(TitlebarOptions {
-                    title: Some("Till — Cash Register".into()),
+                    title: Some("Cash Ledger — Cash Register".into()),
                     ..Default::default()
                 }),
                 ..Default::default()

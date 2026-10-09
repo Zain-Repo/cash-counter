@@ -1,8 +1,11 @@
 //! Native GPUI workspace. Storage operations are serialized on the background executor.
 
+mod company_views;
 #[cfg(test)]
 mod tests;
+mod update_views;
 mod views;
+use company_views::{Access, Page};
 
 use cash_counter::database::Direction;
 use cash_counter::register::{
@@ -27,6 +30,22 @@ enum FormMode {
 }
 
 pub struct RegisterApp {
+    access: Access,
+    page: Page,
+    profile: Option<cash_counter::company::CompanyProfile>,
+    company: Entity<InputState>,
+    address: Entity<InputState>,
+    rules: Entity<InputState>,
+    tolerance: Entity<InputState>,
+    printer: Entity<InputState>,
+    paper: Entity<InputState>,
+    username: Entity<InputState>,
+    password: Entity<InputState>,
+    confirmation: Entity<InputState>,
+    report_start: Entity<InputState>,
+    report_end: Entity<InputState>,
+    report_data: Option<cash_counter::reporting::Report>,
+    report_register: Option<i64>,
     service: Arc<Mutex<Option<RegisterService>>>,
     path: Result<PathBuf, String>,
     snapshot: Option<Snapshot>,
@@ -37,6 +56,9 @@ pub struct RegisterApp {
     notice: Option<String>,
     failed_operation: Option<Operation>,
     task: Option<Task<()>>,
+    updates: update_views::Updates,
+    update_task: Option<Task<()>>,
+    update_idle_task: Option<Task<()>>,
     amount: Entity<InputState>,
     reason: Entity<InputState>,
     date: Entity<InputState>,
@@ -49,7 +71,9 @@ pub struct RegisterApp {
 
 impl RegisterApp {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        Self::with_path(database_path(), window, cx)
+        let mut app = Self::with_path(database_path(), window, cx);
+        app.initialize_updates(window, cx);
+        app
     }
 
     fn with_path(
@@ -59,6 +83,30 @@ impl RegisterApp {
     ) -> Self {
         let today = Local::now().format("%Y-%m-%d").to_string();
         let mut app = Self {
+            access: Access::Loading,
+            page: Page::Register,
+            profile: None,
+            company: cx.new(|cx| InputState::new(window, cx).placeholder("Company name")),
+            address: cx.new(|cx| InputState::new(window, cx).placeholder("Address (optional)")),
+            rules: cx
+                .new(|cx| InputState::new(window, cx).placeholder("Cash handling instructions")),
+            tolerance: cx.new(|cx| InputState::new(window, cx).default_value("0.00")),
+            printer: cx
+                .new(|cx| InputState::new(window, cx).placeholder("Blank uses the system default")),
+            paper: cx.new(|cx| InputState::new(window, cx).default_value("A4")),
+            username: cx.new(|cx| InputState::new(window, cx).placeholder("Username")),
+            password: cx.new(|cx| InputState::new(window, cx).masked(true)),
+            confirmation: cx.new(|cx| InputState::new(window, cx).masked(true)),
+            report_start: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .default_value(Local::now().format("%Y-%m-01").to_string())
+            }),
+            report_end: cx.new(|cx| {
+                InputState::new(window, cx)
+                    .default_value(Local::now().format("%Y-%m-%d").to_string())
+            }),
+            report_data: None,
+            report_register: None,
             service: Arc::new(Mutex::new(None)),
             path,
             snapshot: None,
@@ -69,6 +117,9 @@ impl RegisterApp {
             notice: None,
             failed_operation: None,
             task: None,
+            updates: update_views::Updates::default(),
+            update_task: None,
+            update_idle_task: None,
             amount: cx.new(|cx| InputState::new(window, cx).placeholder("0.00")),
             reason: cx
                 .new(|cx| InputState::new(window, cx).placeholder("e.g. Cash sale or petty cash")),
@@ -83,12 +134,12 @@ impl RegisterApp {
             entry_pages: Vec::new(),
             session_pages: Vec::new(),
         };
-        app.run(Operation::Refresh, window, cx);
+        app.load_company(window, cx);
         app
     }
 
     fn run(&mut self, operation: Operation, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy {
+        if self.busy || self.access != Access::Authenticated {
             return;
         }
         self.busy = true;
@@ -193,10 +244,18 @@ impl RegisterApp {
                 );
             }
         }
+        self.resume_ready_update(window, cx);
         cx.notify();
     }
 
     fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.access != Access::Authenticated {
+            self.submit_access(window, cx);
+            return;
+        }
+        if self.page != Page::Register {
+            return;
+        }
         if self.busy {
             return;
         }

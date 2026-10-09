@@ -72,7 +72,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD_PARTY_NOTICES.md') -Destination (Join-Path $outputDir 'THIRD_PARTY_NOTICES.md')
     & $IsccPath "/DAppVersion=$($package.version)" "/DBuildDir=$buildDir" "/DOutputDir=$outputDir" "/DVcRuntimePath=$VcRuntimePath" "/DNoticesPath=$noticesPath" (Join-Path $PSScriptRoot 'till.iss')
     if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed.' }
-    $installer = Join-Path $outputDir "Till-$($package.version)-windows-x64-setup.exe"
+    $installer = Join-Path $outputDir "CashLedger-$($package.version)-windows-x64-setup.exe"
     if (-not (Test-Path -LiteralPath $installer)) { throw 'Installer output is missing.' }
     Get-FileHash -LiteralPath $installer -Algorithm SHA256
     $releaseFiles = @($installer, (Join-Path $outputDir 'LICENSE'), (Join-Path $outputDir 'THIRD_PARTY_NOTICES.md'), $noticesPath)

@@ -10,7 +10,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Unable to collect locked dependency metadata.' }
     $metadata = $metadataText | ConvertFrom-Json
     $lines = [Collections.Generic.List[string]]::new()
-    $lines.Add('Cash Counter - third-party dependency license inventory')
+    $lines.Add('Cash Ledger - third-party dependency license inventory')
     $lines.Add('Includes Windows runtime, build and test dependencies resolved by Cargo.')
     $lines.Add('License expressions and texts below are supplied by the respective packages.')
     $lines.Add('See THIRD_PARTY_NOTICES.md for embedded assets and Microsoft runtime attribution.')
