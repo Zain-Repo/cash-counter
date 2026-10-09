@@ -77,7 +77,9 @@ try {
         $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $([IO.Path]::GetFileName($file))"
     }
-    [IO.File]::WriteAllLines((Join-Path $outputDir 'SHA256SUMS.txt'), [string[]]$checksums, [Text.UTF8Encoding]::new($false))
+    # GNU sha256sum treats Windows CRLF as part of each filename; emit portable LF lines.
+    $checksumText = ([string[]]$checksums -join "`n") + "`n"
+    [IO.File]::WriteAllText((Join-Path $outputDir 'SHA256SUMS.txt'), $checksumText, [Text.UTF8Encoding]::new($false))
     Write-Output "Installer: $installer"
 }
 finally { Pop-Location }
