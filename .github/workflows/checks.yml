@@ -1,0 +1,59 @@
+name: Checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows checks and tests
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: '0'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUST_BACKTRACE: '1'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the repository toolchain
+        run: |
+          rustup show active-toolchain
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain setup failed.' }
+          rustc --version
+          cargo --version
+      - name: Cache Rust dependencies and check outputs
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+            target/debug
+          key: windows-2025-checks-nodebug-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
+          restore-keys: windows-2025-checks-nodebug-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
+      - name: Verify release version
+        if: github.ref_type == 'tag'
+        run: |
+          $metadata = cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Cargo metadata failed.' }
+          $version = ($metadata.packages | Where-Object name -eq 'cash-counter').version
+          if ($env:GITHUB_REF_NAME -cne "v$version") { throw 'Release tag must match the Cargo package version.' }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Release versions must use X.Y.Z.' }
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check all targets
+        run: cargo check --locked --all-targets
+      - name: Lint all targets
+        run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Run the complete test suite
+        run: cargo test --locked

@@ -1,0 +1,31 @@
+#include <windows.h>
+
+// GPUI's Windows platform loads the application's icon using resource ID 1.
+1 ICON "@ICON@"
+
+1 VERSIONINFO
+FILEVERSION @NUMERIC_VERSION@
+PRODUCTVERSION @NUMERIC_VERSION@
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE 0
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", "Till - Cash Register\0"
+            VALUE "FileVersion", "@VERSION@\0"
+            VALUE "InternalName", "cash-counter\0"
+            VALUE "OriginalFilename", "cash-counter.exe\0"
+            VALUE "ProductName", "Till\0"
+            VALUE "ProductVersion", "@VERSION@\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

@@ -1,0 +1,34 @@
+[package]
+name = "cash-counter"
+version = "0.0.1"
+edition = "2024"
+description = "A native desktop cash register with a persistent SQLite ledger"
+license = "MIT"
+repository = "https://github.com/Zain-Repo/cash-counter"
+readme = "README.md"
+publish = false
+
+[dependencies]
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+gpui-component = { package = "gpui-component-uo", version = "=1.19.0-pre" }
+gpui-component-assets = { package = "gpui-component-assets-uo", version = "=1.19.0-pre" }
+chrono = "0.4"
+directories = "6"
+uuid = { version = "1", features = ["v4"] }
+
+
+# The component mirror requires this matching GPUI API; newer 1.x releases break it.
+gpui-unofficial = "=1.19.0-pre"
+gpui_platform = { package = "gpui-platform-gpui-unofficial", version = "=1.19.0-pre", features = ["wayland", "x11"] }
+
+
+# Workaround for breaking change
+# https://github.com/Lokathor/tinyvec/issues/225
+tinyvec = "=1.12.0"
+
+[dev-dependencies]
+tempfile = "3"
+gpui-unofficial = { version = "=1.19.0-pre", features = ["test-support"] }
+
+[build-dependencies]
+embed-resource = "=3.0.12"

@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  package:
+    name: Package Windows release
+    needs: checks
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - name: Check out the tested tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the repository toolchain
+        run: |
+          rustup show active-toolchain
+          if ($LASTEXITCODE -ne 0) { throw 'Rust toolchain setup failed.' }
+      - name: Cache registry downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/src
+          key: windows-release-registry-${{ hashFiles('Cargo.lock') }}
+      - name: Build installer and release files
+        run: ./packaging/windows/build-installer.ps1
+      - name: Preserve release files
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-release
+          path: |
+            dist/Till-*-windows-x64-setup.exe
+            dist/LICENSE
+            dist/THIRD_PARTY_NOTICES.md
+            dist/THIRD_PARTY_LICENSES.txt
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish tested release
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out release notes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download the tested installer
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-release
+          path: dist
+      - name: Verify checksums and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          (cd dist && sha256sum --check SHA256SUMS.txt)
+          notes="releases/${GITHUB_REF_NAME}.md"
+          test -f "$notes"
+          if gh release view "$GITHUB_REF_NAME" --json isDraft > "$RUNNER_TEMP/release.json" 2>/dev/null; then
+            test "$(jq -r .isDraft "$RUNNER_TEMP/release.json")" = true
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag --draft --title "Cash Counter ${GITHUB_REF_NAME}" --notes-file "$notes"
+          fi
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
