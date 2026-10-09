@@ -2,10 +2,13 @@ use super::*;
 use cash_counter::register::money::{format_amount, format_cad};
 use gpui::prelude::FluentBuilder;
 use gpui_component::{
-    Disableable, Selectable,
+    Disableable, Icon, IconName, Selectable,
+    alert::Alert,
     button::{Button, ButtonVariants},
+    form::{field, v_form},
     h_flex,
     input::Input,
+    tag::Tag,
     v_flex,
 };
 
@@ -21,7 +24,7 @@ impl Render for RegisterApp {
             return div()
                 .size_full()
                 .bg(rgb(CANVAS))
-                .font_family("Candara")
+                .font_family("Segoe UI")
                 .text_color(rgb(INK))
                 .key_context("CashRegister")
                 .on_action(
@@ -53,7 +56,7 @@ impl Render for RegisterApp {
                 }))
                 .size_full()
                 .bg(rgb(CANVAS))
-                .font_family("Candara")
+                .font_family("Segoe UI")
                 .text_color(rgb(INK))
                 .child(self.navigation(cx))
                 .child(self.update_banner())
@@ -114,7 +117,7 @@ impl Render for RegisterApp {
             }))
             .size_full()
             .bg(rgb(CANVAS))
-            .font_family("Candara")
+            .font_family("Segoe UI")
             .text_color(rgb(INK))
             .text_size(px(14.))
             .child(self.sidebar(cx))
@@ -149,19 +152,20 @@ impl RegisterApp {
                     .min_w_0()
                     .child(
                         div()
-                            .text_xs()
-                            .text_color(rgb(MUTED))
-                            .child("Daily cash management"),
-                    )
-                    .child(
-                        div()
                             .id("day-heading")
                             .role(Role::Heading)
                             .aria_label(title.clone())
                             .text_size(px(28.))
-                            .font_family("Georgia")
+                            .font_weight(FontWeight::SEMIBOLD)
                             .child(title),
                     )
+                    .when(session.is_some(), |element| {
+                        element.child(if closed {
+                            Tag::secondary().child("Closed day")
+                        } else {
+                            Tag::success().child("Open day")
+                        })
+                    })
                     .child(
                         div()
                             .text_sm()
@@ -181,6 +185,7 @@ impl RegisterApp {
                     .child(
                         Button::new("refresh")
                             .label("Refresh")
+                            .icon(IconName::RotateCw)
                             .disabled(blocked)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.run(Operation::Refresh, window, cx)
@@ -220,26 +225,20 @@ impl RegisterApp {
                         .role(Role::Status)
                         .aria_label(notice.clone())
                         .py_3()
-                        .text_color(rgb(GREEN))
-                        .child(notice),
+                        .child(Alert::success("save-status-message", notice)),
                 )
             })
             .when_some(self.error.clone(), |element, error| {
                 element.child(
                     v_flex()
                         .gap_3()
-                        .p_4()
                         .mb_4()
-                        .bg(rgb(0xffeee8))
-                        .border_l_2()
-                        .border_color(rgb(0x963e25))
                         .child(
                             div()
                                 .id("operation-error")
                                 .role(Role::Alert)
                                 .aria_label(error.clone())
-                                .text_color(rgb(0x80341f))
-                                .child(error),
+                                .child(Alert::error("operation-error-message", error)),
                         )
                         .when(self.failed_operation.is_some(), |element| {
                             element.child(
@@ -302,15 +301,17 @@ pub(super) fn input_field(
     state: &Entity<InputState>,
     disabled: bool,
 ) -> impl IntoElement {
-    v_flex()
-        .gap_2()
-        .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(label))
-        .child(
+    v_form().child(
+        field().label(label).child(
             Input::new(state)
                 .aria_label(label)
+                .when(matches!(label, "Password" | "Confirm password"), |input| {
+                    input.mask_toggle()
+                })
                 .disabled(disabled)
                 .h(px(42.)),
-        )
+        ),
+    )
 }
 
 impl RegisterApp {
@@ -339,7 +340,7 @@ impl RegisterApp {
                             .items_center()
                             .justify_center()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child("±"),
+                            .child(Icon::new(IconName::Building2)),
                     )
                     .child(
                         v_flex()
@@ -384,7 +385,8 @@ impl RegisterApp {
             .child(
                 Button::new("add-register")
                     .ghost()
-                    .label("+ Add register")
+                    .icon(IconName::Plus)
+                    .label("Add register")
                     .disabled(blocked)
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.change_mode(FormMode::Setup, window, cx)

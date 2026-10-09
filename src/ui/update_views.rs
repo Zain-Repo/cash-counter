@@ -3,9 +3,12 @@
 use super::*;
 use cash_counter::updater::{self, AvailableUpdate, PreparedUpdate};
 use gpui_component::{
-    Disableable, Selectable,
+    Disableable,
+    alert::Alert,
     button::{Button, ButtonVariants},
-    h_flex, v_flex,
+    h_flex,
+    switch::Switch,
+    v_flex,
 };
 use serde::{Deserialize, Serialize};
 use std::{io::Write, path::Path, time::Duration};
@@ -261,7 +264,7 @@ impl RegisterApp {
                 || self.address.read(cx).value().as_ref() != profile.address
                 || self.rules.read(cx).value().as_ref() != profile.rules
                 || self.printer.read(cx).value().as_ref() != profile.printer_name
-                || self.paper.read(cx).value().as_ref() != profile.paper_size
+                || self.paper.read(cx).selected_value().copied().unwrap_or("") != profile.paper_size
                 || self.tolerance.read(cx).value().as_ref()
                     != cash_counter::register::money::format_amount(
                         profile.closing_variance_threshold_cents,
@@ -400,29 +403,31 @@ impl RegisterApp {
                 .role(Role::Status)
                 .px_8()
                 .py_3()
-                .text_color(rgb(0x265746))
-                .child(self.updates.status.clone())
+                .child(Alert::info(
+                    "update-banner-message",
+                    self.updates.status.clone(),
+                ))
         }))
     }
 
     pub(super) fn updates_view(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let blocked = !self.updates.enabled || self.updates.working || self.updates.installing;
         v_flex().gap_3().mt_5().pt_5().border_t_1().border_color(rgb(0xdde3dc))
-            .child(div().font_weight(FontWeight::SEMIBOLD).child("Updates"))
+            .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child("Updates"))
             .child(div().child(format!("Cash Ledger · Version {}", env!("CARGO_PKG_VERSION"))))
-            .child(div().id("settings-update-status").role(Role::Status).child(self.updates.status.clone()))
+            .child(div().id("settings-update-status").role(Role::Status).child(Alert::info("settings-update-message", self.updates.status.clone())))
             .children(self.updates.error.clone().map(|error| {
-                div().id("update-error").role(Role::Alert).text_color(rgb(0x9b3030)).child(error)
+                div().id("update-error").role(Role::Alert).child(Alert::error("update-error-message", error))
             }))
             .children(self.updates.preference_error.clone().map(|error| {
-                div().id("update-preference-error").role(Role::Alert).text_color(rgb(0x9b3030)).child(error)
+                div().id("update-preference-error").role(Role::Alert).child(Alert::warning("update-preference-message", error))
             }))
             .children(self.updates.failure_notice.clone().map(|error| {
-                div().id("previous-update-error").role(Role::Alert).text_color(rgb(0x9b3030)).child(error)
+                div().id("previous-update-error").role(Role::Alert).child(Alert::warning("previous-update-message", error).title("Automatic installation paused"))
             }))
             .child(h_flex().gap_3().flex_wrap()
-                .child(Button::new("automatic-updates").label(if self.updates.automatic { "Automatic updates: On" } else { "Automatic updates: Off" })
-                    .selected(self.updates.automatic).disabled(blocked)
+                .child(Switch::new("automatic-updates").label("Automatic updates")
+                    .checked(self.updates.automatic).disabled(blocked)
                     .on_click(cx.listener(|this, _, window, cx| this.toggle_updates(window, cx))))
                 .child(Button::new("check-updates").label("Check for updates").loading(self.updates.working).disabled(blocked)
                     .on_click(cx.listener(|this, _, window, cx| this.check_updates(window, cx))))

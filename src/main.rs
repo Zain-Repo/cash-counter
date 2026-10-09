@@ -34,7 +34,7 @@ fn main() {
         theme.colors.ring = rgb(0x265746).into();
         theme.radius = px(6.);
         theme.font_size = px(14.);
-        theme.font_family = "Candara".into();
+        theme.font_family = "Segoe UI".into();
         theme.tokens = gpui_component::theme::ThemeTokens::from(&theme.colors);
         Theme::sync_base(cx);
         cx.bind_keys([

@@ -7,17 +7,52 @@ an additional argument, breaking the component mirror's published base package.
 Keep these pins together; validate upgrades as one compatible set.
 
 Research sources: [the published component package](https://docs.rs/crate/gpui-component-uo/1.19.0-pre),
-[upstream component documentation](https://longbridge.github.io/gpui-component/docs/),
+[GPUI Kit component documentation](https://gpui-kit.com/component/),
 and [the GPUI publisher](https://github.com/iamnbutler/gpui-unofficial).
 Exact input, button, theme, root, task, and focus signatures were checked against
 the installed packages. The current upstream documentation has moved to GPUI
 Kit; examples from that newer API should not be copied without checking versions.
 
 The layout uses a quiet green and warm neutral palette, a flat balance band,
-an aligned movement ledger, and a focused form. It uses Candara for interface
-text, Georgia for the date heading, and Consolas for amounts. These fonts are
+an aligned movement ledger, and a focused form. It uses Segoe UI for interface
+text and headings, and Consolas for amounts. These fonts are
 available on the validation Windows host; other platforms may use GPUI font
 fallbacks. Controls reuse the library's interaction and focus behavior.
+Sign-in uses a bordered form, navigation uses an underline tab bar, and
+authentication, save, and update feedback uses GPUI Component alerts with
+semantic status/error roles. Component APIs are checked against the installed
+mirror rather than upgrading the framework to follow current Kit examples.
+
+## Component integration
+
+| Component | Application use |
+| --- | --- |
+| Form / Field / Input | Consistent field labels and spacing across sign-in, setup, cash entry, and reports |
+| GroupBox | Company, cash handling, and printing groups during first-run setup |
+| Accordion | Expandable settings sections; expansion survives edits and saves |
+| Select | A4/Letter paper selection and a searchable report-register selector |
+| TabBar / Tab | Cash register, Reports, and Settings navigation with an active-page indicator |
+| Switch | Automatic-update preference, using the existing persistence and failure handling |
+| Tag | Open/closed status in the register header and report preview |
+| DescriptionList | Separate labels and values for report-day cash totals |
+| Icon / Button | Embedded icons for actions and register identity |
+| Alert | Errors, successful saves, and update feedback |
+
+Settings validation expands every section so invalid fields remain reachable.
+The paper selector accepts only A4 or Letter and participates in the updater's
+unsaved-work check. Report registers are identified by database ID, so repeated
+names do not select the wrong register. Sign-out clears the selector's contents.
+
+Report shortcuts select Today, Last 7 days (today plus the preceding six days),
+or This month (the first day through today), using the computer's local date.
+They preserve the register filter. Changing dates or registers clears the
+previous preview; generate the report again before exporting or printing.
+Password inputs include a reveal button; submitting or signing out restores
+masking and clears the password.
+
+The website's newer DatePicker and Empty components are not available in this
+pinned mirror. Date fields retain ISO text entry and backend date validation.
+No new dependencies or framework upgrades are required for these components.
 
 ## Workflow
 
@@ -54,7 +89,8 @@ reported as saved, so it is not silently retried as a new entry.
 ## Keyboard and state handling
 
 Tab/Shift+Tab navigate controls. Buttons support keyboard activation; inputs
-support the library's selection, clipboard, and IME behavior. Ctrl+Enter submits
+support the library's selection, clipboard, and IME behavior. Enter signs in
+from either the username or password input. Ctrl+Enter submits
 the current form; Escape cancels an auxiliary form. A closing count requires
 two submissions, including the explicit review stage. Inputs have visible
 labels and accessible names. Errors remain visible and use an alert role;

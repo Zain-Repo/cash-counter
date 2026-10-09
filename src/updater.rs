@@ -358,6 +358,12 @@ fn apply_update_args() -> Result<bool, String> {
             .parse::<u64>()
             .map_err(|e| e.to_string())?;
         verify_file(&installer, hash, size)?;
+        let log = installer
+            .parent()
+            .ok_or("Missing staging directory")?
+            .join("setup.log");
+        let directory_argument = installer_path_argument("/DIR=", directory)?;
+        let log_argument = installer_path_argument("/LOG=", &log)?;
         // The helper never terminates the app. A busy or stalled parent cancels the handoff.
         unsafe {
             let process = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
@@ -402,7 +408,8 @@ fn apply_update_args() -> Result<bool, String> {
                 "/RESTARTEXITCODE=3010",
                 "/UPDATEFROMAPP",
             ])
-            .arg(format!("/DIR={}", directory.display()))
+            .arg(directory_argument)
+            .arg(log_argument)
             .status()
         {
             Ok(status) => status,
@@ -414,7 +421,10 @@ fn apply_update_args() -> Result<bool, String> {
             }
         };
         if !status.success() {
-            let message = format!("Installer failed with status {status}");
+            let message = format!(
+                "Installer failed with status {status}. Close other Cash Ledger windows and retry. Setup log: {}",
+                log.display()
+            );
             record_helper_failure(&message);
             // Parent has exited. Restore the app on an ordinary installer failure,
             // but never launch a partially replaced installation awaiting reboot.
@@ -431,6 +441,36 @@ fn apply_update_args() -> Result<bool, String> {
     }
     #[cfg(not(windows))]
     Err("Update installation requires Windows".into())
+}
+
+/// Inno Setup 6 expects ordinary DOS/UNC paths, not Rust's canonical verbatim paths.
+#[cfg(windows)]
+fn installer_path_argument(option: &str, path: &Path) -> Result<std::ffi::OsString, String> {
+    use std::path::{Component, Prefix};
+    let mut components = path.components();
+    let mut normalized = PathBuf::new();
+    match components.next() {
+        Some(Component::Prefix(prefix)) => match prefix.kind() {
+            Prefix::VerbatimDisk(drive) => normalized.push(format!("{}:", char::from(drive))),
+            Prefix::VerbatimUNC(server, share) => {
+                normalized.push(r"\\");
+                normalized.push(server);
+                normalized.push(share);
+            }
+            Prefix::Disk(_) | Prefix::UNC(_, _) => normalized.push(prefix.as_os_str()),
+            _ => return Err("Unsupported installer path".into()),
+        },
+        _ => return Err("Installer paths must be absolute".into()),
+    }
+    for component in components {
+        normalized.push(component.as_os_str());
+    }
+    if !normalized.is_absolute() {
+        return Err("Installer paths must be absolute".into());
+    }
+    let mut argument = std::ffi::OsString::from(option);
+    argument.push(normalized);
+    Ok(argument)
 }
 
 fn copy_new(source: &Path, destination: &Path) -> Result<(), String> {
@@ -476,6 +516,28 @@ pub fn hold_app_mutex() -> Result<AppPresence, String> {
 #[cfg(test)]
 mod tests {
     use super::{APP_ID, APP_MUTEX, MARKER};
+
+    #[cfg(windows)]
+    #[test]
+    fn installer_arguments_use_normal_windows_paths() {
+        use super::installer_path_argument;
+        use std::{ffi::OsString, path::Path};
+        for (input, expected) in [
+            (
+                r"\\?\C:\Users\Test User\Till",
+                r"/DIR=C:\Users\Test User\Till",
+            ),
+            (r"\\?\UNC\server\share\Till", r"/DIR=\\server\share\Till"),
+            (r"C:\Users\Élodie\Till", r"/DIR=C:\Users\Élodie\Till"),
+        ] {
+            assert_eq!(
+                installer_path_argument("/DIR=", Path::new(input)).unwrap(),
+                OsString::from(expected)
+            );
+        }
+        assert!(installer_path_argument("/DIR=", Path::new("Till")).is_err());
+        assert!(installer_path_argument("/DIR=", Path::new(r"\\?\Volume{unknown}\Till")).is_err());
+    }
 
     #[test]
     fn installer_and_updater_share_upgrade_identity() {

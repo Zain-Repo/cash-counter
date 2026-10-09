@@ -1,4 +1,4 @@
-name: CI
+name: Validate, build and release
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
     needs: checks
     uses: ./.github/workflows/package.yml
   release:
-    needs: package
+    needs: [checks, package]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     permissions:
       contents: write

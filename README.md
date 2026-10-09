@@ -50,7 +50,8 @@ shortcuts while preserving the register database.
 5. Review saved days and movement history; Refresh reloads changes from another instance.
 6. Enter the physical closing count, review the difference, then confirm closure.
 
-Ctrl+Enter submits the current form; Escape cancels an auxiliary form.
+Enter signs in from either login field. Ctrl+Enter submits the current form;
+Escape cancels an auxiliary form.
 Closing requires the explicit review stage. Closed days are read-only.
 
 ## Data and limitations

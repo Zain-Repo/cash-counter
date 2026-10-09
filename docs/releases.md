@@ -10,9 +10,10 @@ repository are named `cash-counter`.
    with `cargo check`. Preserve third-party dependency versions.
 2. Add `releases/vX.Y.Z.md` describing implemented changes and known limitations.
 3. Run formatting, checks, Clippy and tests, then commit and push to `main`.
-4. CI runs checks, then installer packaging, then the reusable Release workflow
-   sequentially in the same run. No manual tag push or separate release run is
-   required. Pull requests run checks and packaging without publishing.
+4. The Validate, build and release workflow runs version validation and checks,
+   then installer packaging, then the reusable Release workflow sequentially in
+   the same run. No manual tag push or separate release run is required.
+   Pull requests run checks and packaging without publishing.
 
 After checks and packaging succeed on main, the release job reads the manifest
 version, requires matching release notes, and verifies SHA-256 checksums of the

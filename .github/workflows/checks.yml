@@ -42,13 +42,13 @@ jobs:
           key: windows-2025-checks-nodebug-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-${{ github.sha }}
           restore-keys: windows-2025-checks-nodebug-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}-
       - name: Verify release version
-        if: github.ref_type == 'tag'
         run: |
           $metadata = cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0) { throw 'Cargo metadata failed.' }
           $version = ($metadata.packages | Where-Object name -eq 'cash-counter').version
-          if ($env:GITHUB_REF_NAME -cne "v$version") { throw 'Release tag must match the Cargo package version.' }
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne "v$version") { throw 'Release tag must match the Cargo package version.' }
           if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Release versions must use X.Y.Z.' }
+          if (-not (Test-Path -LiteralPath "releases/v$version.md")) { throw 'Release notes must exist for the package version.' }
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check all targets

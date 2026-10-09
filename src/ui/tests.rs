@@ -47,6 +47,49 @@ fn workspace(cx: &mut TestAppContext, path: PathBuf) -> (Entity<RegisterApp>, Vi
 }
 
 #[gpui::test]
+fn enter_signs_in_from_either_login_field(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (app, mut cx) = workspace(cx, directory.path().join("enter-login.sqlite3"));
+    for password_focus in [false, true] {
+        app.update_in(&mut cx, |app, window, cx| {
+            app.logout(window, cx);
+            app.username
+                .update(cx, |input, cx| input.set_value("admin", window, cx));
+            app.password.update(cx, |input, cx| {
+                input.set_value("test administrator password", window, cx)
+            });
+            let input = if password_focus {
+                &app.password
+            } else {
+                &app.username
+            };
+            input.update(cx, |input, cx| input.focus(window, cx));
+        });
+        cx.simulate_keystrokes("enter");
+        cx.run_until_parked();
+        app.update_in(&mut cx, |app, _, _| {
+            assert!(app.access == Access::Authenticated);
+            assert!(app.error.is_none());
+        });
+    }
+    app.update_in(&mut cx, |app, window, cx| {
+        app.logout(window, cx);
+        app.password.update(cx, |input, cx| {
+            input.set_value("incorrect password", window, cx);
+            input.focus(window, cx);
+        });
+    });
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    app.update_in(&mut cx, |app, _, cx| {
+        assert!(app.access == Access::Login);
+        assert!(app.snapshot.is_none());
+        assert!(app.error.is_some());
+        assert!(app.password.read(cx).value().is_empty());
+    });
+}
+
+#[gpui::test]
 fn logout_removes_ledger_and_blocks_mutations(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
     let (app, mut cx) = workspace(cx, directory.path().join("logout.sqlite3"));
@@ -66,6 +109,108 @@ fn logout_removes_ledger_and_blocks_mutations(cx: &mut TestAppContext) {
         );
         assert!(!app.busy);
         assert!(app.password.read(cx).value().is_empty());
+    });
+}
+
+#[gpui::test]
+fn paper_select_saves_and_blocks_restart_while_unsaved(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("paper-select.sqlite3");
+    let (app, mut visual) = workspace(cx, path.clone());
+    app.update_in(&mut visual, |app, window, cx| {
+        app.navigate(Page::Settings, window, cx);
+        assert_eq!(app.paper.read(cx).selected_value(), Some(&"A4"));
+        app.paper.update(cx, |state, cx| {
+            state.set_selected_value(&"Letter", window, cx)
+        });
+        assert!(!app.can_restart_for_update(cx));
+        app.settings_sections = vec![2];
+        app.save_settings(window, cx);
+    });
+    visual.run_until_parked();
+    app.update_in(&mut visual, |app, _, cx| {
+        assert!(app.error.is_none());
+        assert_eq!(app.profile.as_ref().unwrap().paper_size, "Letter");
+        assert_eq!(app.settings_sections, vec![2]);
+        assert!(app.can_restart_for_update(cx));
+    });
+    assert_eq!(
+        cash_counter::company::CompanyService::open(path)
+            .unwrap()
+            .profile()
+            .unwrap()
+            .unwrap()
+            .paper_size,
+        "Letter"
+    );
+}
+
+#[gpui::test]
+fn report_shortcuts_use_inclusive_dates_and_preserve_register_filter(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (app, mut visual) = workspace(cx, directory.path().join("periods.sqlite3"));
+    let today = chrono::NaiveDate::from_ymd_opt(2024, 3, 1).unwrap();
+    app.update_in(&mut visual, |app, window, cx| {
+        app.navigate(Page::Reports, window, cx);
+        app.report_register = Some(123);
+        app.set_report_period(super::ReportPeriod::LastSevenDays, today, window, cx);
+        assert_eq!(app.report_start.read(cx).value(), "2024-02-24");
+        assert_eq!(app.report_end.read(cx).value(), "2024-03-01");
+        assert_eq!(app.report_register, Some(123));
+        app.set_report_period(super::ReportPeriod::ThisMonth, today, window, cx);
+        assert_eq!(app.report_start.read(cx).value(), "2024-03-01");
+        app.busy = true;
+        app.set_report_period(
+            super::ReportPeriod::Today,
+            chrono::NaiveDate::from_ymd_opt(2024, 3, 2).unwrap(),
+            window,
+            cx,
+        );
+        assert_eq!(app.report_end.read(cx).value(), "2024-03-01");
+        app.navigate(Page::Settings, window, cx);
+        assert!(app.page == Page::Reports);
+        app.busy = false;
+    });
+}
+
+#[gpui::test]
+fn register_select_uses_ids_and_logout_clears_its_contents(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (app, mut visual) = workspace(cx, directory.path().join("register-select.sqlite3"));
+    app.update_in(&mut visual, |app, window, cx| {
+        let choices = gpui_component::searchable_list::SearchableVec::new(vec![
+            super::RegisterChoice {
+                id: None,
+                name: "All registers".into(),
+            },
+            super::RegisterChoice {
+                id: Some(1),
+                name: "Front desk".into(),
+            },
+            super::RegisterChoice {
+                id: Some(2),
+                name: "Front desk".into(),
+            },
+        ]);
+        app.report_selector.update(cx, |state, cx| {
+            state.set_items(choices, window, cx);
+            state.set_selected_value(&Some(2), window, cx);
+            cx.emit(gpui_component::select::SelectEvent::Confirm(Some(Some(2))));
+        });
+    });
+    visual.run_until_parked();
+    app.update_in(&mut visual, |app, window, cx| {
+        assert_eq!(app.report_register, Some(2));
+        assert_eq!(
+            app.report_selector.read(cx).selected_value(),
+            Some(&Some(2))
+        );
+        app.logout(window, cx);
+        assert_eq!(app.report_register, None);
+        app.report_selector.update(cx, |state, cx| {
+            state.set_selected_value(&Some(2), window, cx)
+        });
+        assert!(app.report_selector.read(cx).selected_value().is_none());
     });
 }
 

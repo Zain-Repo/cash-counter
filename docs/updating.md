@@ -26,6 +26,10 @@ helper validates the downloaded installer and opens a handle to the running
 application before acknowledging readiness. Only then does the GUI exit. The
 helper waits for that process to terminate and invokes the existing per-user
 Inno Setup installer, targeting the same installation directory.
+The helper converts canonical Windows paths to ordinary DOS/UNC paths for
+Inno Setup's command-line arguments. Each attempt writes `setup.log` in its
+temporary `cash-ledger-update-*` directory; installation failures display the
+log location for diagnosis.
 
 The installer never force-closes another app instance. Its application mutex
 prevents replacement while another instance is running. Installation failures

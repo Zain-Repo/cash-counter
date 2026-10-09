@@ -2,10 +2,17 @@ use super::views::input_field;
 use super::*;
 use cash_counter::company::{CompanyProfile, CompanyService, SetupCompany};
 use gpui_component::{
-    Disableable, Selectable,
+    Disableable, IconName,
+    accordion::Accordion,
+    alert::Alert,
     button::{Button, ButtonVariants},
+    description_list::DescriptionList,
+    group_box::GroupBox,
     h_flex,
     scroll::Scrollbar,
+    select::Select,
+    tab::{Tab, TabBar},
+    tag::Tag,
     v_flex,
 };
 
@@ -81,10 +88,16 @@ impl RegisterApp {
                     ),
                 ),
                 (&self.printer, profile.printer_name.clone()),
-                (&self.paper, profile.paper_size.clone()),
             ] {
                 input.update(cx, |input, cx| input.set_value(value, window, cx));
             }
+            let paper = if profile.paper_size == "Letter" {
+                "Letter"
+            } else {
+                "A4"
+            };
+            self.paper
+                .update(cx, |state, cx| state.set_selected_value(&paper, window, cx));
         }
     }
 
@@ -99,9 +112,12 @@ impl RegisterApp {
         {
             return Err("Address, rules, or printer name is too long.".into());
         }
-        if !matches!(self.paper.read(cx).value().trim(), "A4" | "Letter") {
-            return Err("Use A4 or Letter for paper size.".into());
-        }
+        let paper = self
+            .paper
+            .read(cx)
+            .selected_value()
+            .copied()
+            .ok_or("Choose A4 or Letter for paper size.")?;
         let threshold =
             parse_amount(self.tolerance.read(cx).value().as_ref()).map_err(str::to_string)?;
         if threshold > 100_000_000 {
@@ -113,7 +129,7 @@ impl RegisterApp {
             rules: self.rules.read(cx).value().trim().to_string(),
             closing_variance_threshold_cents: threshold,
             printer_name: self.printer.read(cx).value().trim().to_string(),
-            paper_size: self.paper.read(cx).value().trim().to_string(),
+            paper_size: paper.to_string(),
         })
     }
 
@@ -187,8 +203,12 @@ impl RegisterApp {
             let result = work.await;
             let _ = view.update_in(cx, |view, window, cx| {
                 view.busy = false;
-                view.password.update(cx, |input, cx| input.set_value("", window, cx));
-                view.confirmation.update(cx, |input, cx| input.set_value("", window, cx));
+                for input in [&view.password, &view.confirmation] {
+                    input.update(cx, |input, cx| {
+                        input.set_value("", window, cx);
+                        input.set_masked(true, window, cx);
+                    });
+                }
                 match result {
                     Ok(Some(profile)) if setup => {
                         view.notice = Some("Company created. Sign in with your administrator account.".into());
@@ -218,6 +238,8 @@ impl RegisterApp {
         let profile = match self.edited_profile(cx) {
             Ok(profile) => profile,
             Err(error) => {
+                // Reveal every section so a validation error never points to a hidden field.
+                self.settings_sections = vec![0, 1, 2];
                 self.error = Some(error);
                 cx.notify();
                 return;
@@ -258,6 +280,18 @@ impl RegisterApp {
         self.access = Access::Login;
         self.page = Page::Register;
         self.snapshot = None;
+        self.report_register = None;
+        self.report_selector.update(cx, |state, cx| {
+            state.set_items(
+                SearchableVec::new(vec![RegisterChoice {
+                    id: None,
+                    name: "All registers".into(),
+                }]),
+                window,
+                cx,
+            );
+            state.set_selected_value(&None, window, cx);
+        });
         self.report_data = None;
         self.selection = Selection::default();
         self.closing_review = None;
@@ -273,6 +307,9 @@ impl RegisterApp {
             &self.confirmation,
         ] {
             input.update(cx, |input, cx| input.set_value("", window, cx));
+        }
+        for input in [&self.password, &self.confirmation] {
+            input.update(cx, |input, cx| input.set_masked(true, window, cx));
         }
         self.username
             .update(cx, |input, cx| input.focus(window, cx));
@@ -290,8 +327,9 @@ impl RegisterApp {
             "Sign in"
         };
         let mut form = v_flex().w(px(470.)).max_w_full().flex_shrink_0().gap_5().p_8()
+            .bg(rgb(0xffffff)).border_1().border_color(rgb(0xdde3dc)).rounded_lg()
             .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child("Cash Ledger"))
-            .child(div().font_family("Georgia").text_size(px(30.)).child(title))
+            .child(div().text_size(px(30.)).font_weight(FontWeight::SEMIBOLD).child(title))
             .child(div().text_color(rgb(0x61716a)).child(if company { "Company details and cash handling guidance for your local workspace." } else if setup { "This account protects access on this computer. Use a password of at least 12 characters." } else { "Enter your local account to open the cash register." }));
         if company {
             form = form.child(self.company_fields());
@@ -313,6 +351,8 @@ impl RegisterApp {
             .child(
                 Button::new("access-submit")
                     .primary()
+                    .w_full()
+                    .h(px(42.))
                     .label(if company {
                         "Continue"
                     } else if setup {
@@ -347,7 +387,14 @@ impl RegisterApp {
                     .size_full()
                     .overflow_y_scroll()
                     .track_scroll(&self.access_scroll)
-                    .child(h_flex().w_full().items_start().justify_center().child(form)),
+                    .child(
+                        h_flex()
+                            .w_full()
+                            .p_8()
+                            .items_start()
+                            .justify_center()
+                            .child(form),
+                    ),
             )
             .child(Scrollbar::vertical(&self.access_scroll))
             .into_any_element()
@@ -360,17 +407,97 @@ impl RegisterApp {
                 div()
                     .id("access-error")
                     .role(Role::Alert)
-                    .text_color(rgb(0x9b3030))
-                    .child(text)
+                    .child(Alert::error("access-error-message", text))
             }))
-            .children(self.notice.clone().map(|text| div().child(text)))
+            .children(self.notice.clone().map(|text| {
+                div()
+                    .id("access-notice-status")
+                    .role(Role::Status)
+                    .child(Alert::success("access-notice", text))
+            }))
     }
 
     pub(super) fn company_fields(&self) -> impl IntoElement {
-        v_flex().gap_5()
-            .child(v_flex().gap_4().child(div().font_weight(FontWeight::SEMIBOLD).child("Company")).child(input_field("Company name", &self.company, self.busy)).child(input_field("Company address", &self.address, self.busy)))
-            .child(v_flex().gap_4().child(div().font_weight(FontWeight::SEMIBOLD).child("Cash handling")).child(input_field("Cash handling rules", &self.rules, self.busy)).child(input_field("Closing variance warning · CAD", &self.tolerance, self.busy)).child(div().text_sm().child("Warn when the final count differs by more than this amount. Rules are guidance for staff.")))
-            .child(v_flex().gap_4().child(div().font_weight(FontWeight::SEMIBOLD).child("Printing")).child(input_field("Printer name · optional", &self.printer, self.busy)).child(input_field("Paper size · A4 or Letter", &self.paper, self.busy)))
+        v_flex()
+            .gap_5()
+            .child(
+                GroupBox::new()
+                    .title("Company")
+                    .child(self.company_details()),
+            )
+            .child(
+                GroupBox::new()
+                    .title("Cash handling")
+                    .child(self.cash_handling_fields()),
+            )
+            .child(
+                GroupBox::new()
+                    .title("Printing")
+                    .child(self.printing_fields()),
+            )
+    }
+
+    fn company_details(&self) -> impl IntoElement {
+        v_flex()
+            .gap_4()
+            .child(input_field("Company name", &self.company, self.busy))
+            .child(input_field("Company address", &self.address, self.busy))
+    }
+
+    fn cash_handling_fields(&self) -> impl IntoElement {
+        v_flex().gap_4()
+            .child(input_field("Cash handling rules", &self.rules, self.busy))
+            .child(input_field("Closing variance warning · CAD", &self.tolerance, self.busy))
+            .child(div().text_sm().child("Warn when the final count differs by more than this amount. Rules are guidance for staff."))
+    }
+
+    fn printing_fields(&self) -> impl IntoElement {
+        v_flex()
+            .gap_4()
+            .child(input_field(
+                "Printer name · optional",
+                &self.printer,
+                self.busy,
+            ))
+            .child(
+                gpui_component::form::v_form().child(
+                    gpui_component::form::field().label("Paper size").child(
+                        Select::new(&self.paper)
+                            .accessibility_label("Paper size")
+                            .disabled(self.busy)
+                            .w_full(),
+                    ),
+                ),
+            )
+    }
+
+    fn settings_fields(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        Accordion::new("company-settings")
+            .multiple(true)
+            .disabled(self.busy)
+            .item(|item| {
+                item.title("Company")
+                    .icon(IconName::Building2)
+                    .open(self.settings_sections.contains(&0))
+                    .child(self.company_details())
+            })
+            .item(|item| {
+                item.title("Cash handling")
+                    .icon(IconName::ChartPie)
+                    .open(self.settings_sections.contains(&1))
+                    .child(self.cash_handling_fields())
+            })
+            .item(|item| {
+                item.title("Printing")
+                    .icon(IconName::Settings2)
+                    .open(self.settings_sections.contains(&2))
+                    .child(self.printing_fields())
+            })
+            .on_toggle_click(cx.listener(|this, indices: &[usize], _, cx| {
+                this.settings_sections = indices.to_vec();
+                this.settings_sections.sort_unstable();
+                cx.notify();
+            }))
     }
 
     pub(super) fn settings_view(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -385,18 +512,19 @@ impl RegisterApp {
                     .gap_5()
                     .child(
                         div()
-                            .font_family("Georgia")
+                            .font_weight(FontWeight::SEMIBOLD)
                             .text_size(px(28.))
                             .child("Settings"),
                     )
                     .child(div().child(
                         "Configure your company, cash handling guidance and report printing.",
                     ))
-                    .child(self.company_fields())
+                    .child(self.settings_fields(cx))
                     .child(self.access_feedback())
                     .child(
                         Button::new("save-settings")
                             .primary()
+                            .icon(IconName::Check)
                             .label("Save settings")
                             .loading(self.busy)
                             .disabled(self.busy)
@@ -424,45 +552,107 @@ impl RegisterApp {
                 ),
             )
             .child(
-                Button::new("nav-register")
-                    .label("Cash register")
-                    .disabled(self.busy)
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.page = Page::Register;
-                        this.error = None;
-                        this.notice = None;
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("nav-reports")
-                    .label("Reports")
-                    .disabled(self.busy || self.failed_operation.is_some())
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.page = Page::Reports;
-                        this.error = None;
-                        this.notice = None;
-                        cx.notify();
-                    })),
-            )
-            .child(
-                Button::new("nav-settings")
-                    .label("Settings")
-                    .disabled(self.busy || self.failed_operation.is_some())
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.page = Page::Settings;
-                        this.error = None;
-                        this.notice = None;
-                        this.populate_settings(window, cx);
-                        cx.notify();
+                TabBar::new("workspace-navigation")
+                    .underline()
+                    .selected_index(match self.page {
+                        Page::Register => 0,
+                        Page::Reports => 1,
+                        Page::Settings => 2,
+                    })
+                    .child(Tab::new().label("Cash register").disabled(self.busy))
+                    .child(
+                        Tab::new()
+                            .label("Reports")
+                            .disabled(self.busy || self.failed_operation.is_some()),
+                    )
+                    .child(
+                        Tab::new()
+                            .label("Settings")
+                            .disabled(self.busy || self.failed_operation.is_some()),
+                    )
+                    .on_click(cx.listener(|this, index: &usize, window, cx| {
+                        let page = match index {
+                            0 => Page::Register,
+                            1 => Page::Reports,
+                            2 => Page::Settings,
+                            _ => return,
+                        };
+                        this.navigate(page, window, cx);
                     })),
             )
             .child(
                 Button::new("logout")
                     .label("Sign out")
+                    .ghost()
+                    .icon(IconName::ArrowRight)
                     .disabled(self.busy || self.failed_operation.is_some())
                     .on_click(cx.listener(|this, _, window, cx| this.logout(window, cx))),
             )
+    }
+
+    pub(super) fn navigate(&mut self, page: Page, window: &mut Window, cx: &mut Context<Self>) {
+        if self.access != Access::Authenticated
+            || self.busy
+            || (page != Page::Register && self.failed_operation.is_some())
+            || self.page == page
+        {
+            return;
+        }
+        self.page = page;
+        self.error = None;
+        self.notice = None;
+        if page == Page::Settings {
+            self.populate_settings(window, cx);
+        }
+        cx.notify();
+    }
+
+    pub(super) fn refresh_report_registers(
+        &mut self,
+        snapshot: &Snapshot,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let mut choices = vec![RegisterChoice {
+            id: None,
+            name: "All registers".into(),
+        }];
+        choices.extend(snapshot.registers.iter().map(|register| RegisterChoice {
+            id: Some(register.id),
+            name: register.name.clone().into(),
+        }));
+        let selected = self.report_register;
+        self.report_selector.update(cx, |state, cx| {
+            state.set_items(SearchableVec::new(choices), window, cx);
+            state.set_selected_value(&selected, window, cx);
+        });
+    }
+
+    pub(super) fn set_report_period(
+        &mut self,
+        period: ReportPeriod,
+        today: NaiveDate,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.busy || self.access != Access::Authenticated {
+            return;
+        }
+        let Some((start, end)) = period.range(today) else {
+            self.error = Some("The reporting period is outside the supported date range.".into());
+            cx.notify();
+            return;
+        };
+        self.report_start.update(cx, |input, cx| {
+            input.set_value(start.format("%Y-%m-%d").to_string(), window, cx)
+        });
+        self.report_end.update(cx, |input, cx| {
+            input.set_value(end.format("%Y-%m-%d").to_string(), window, cx)
+        });
+        self.report_data = None;
+        self.error = None;
+        self.notice = None;
+        cx.notify();
     }
 
     pub(super) fn generate_report(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -588,44 +778,53 @@ impl RegisterApp {
     }
 
     pub(super) fn reports_view(&self, cx: &mut Context<Self>) -> AnyElement {
-        let mut register_filter = h_flex().gap_3().flex_wrap().child(
-            Button::new("report-all-registers")
-                .label("All registers")
-                .selected(self.report_register.is_none())
-                .disabled(self.busy)
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.report_register = None;
-                    this.report_data = None;
-                    cx.notify();
-                })),
+        let register_filter = gpui_component::form::v_form().child(
+            gpui_component::form::field().label("Register").child(
+                Select::new(&self.report_selector)
+                    .accessibility_label("Report register")
+                    .search_placeholder("Find a register")
+                    .disabled(self.busy)
+                    .w(px(300.)),
+            ),
         );
-        if let Some(snapshot) = &self.snapshot {
-            for register in &snapshot.registers {
-                let id = register.id;
-                register_filter = register_filter.child(
-                    Button::new(("report-register", id as u64))
-                        .label(register.name.clone())
-                        .selected(self.report_register == Some(id))
-                        .disabled(self.busy)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.report_register = Some(id);
-                            this.report_data = None;
-                            cx.notify();
-                        })),
-                );
-            }
-        }
         let mut body = v_flex()
             .gap_5()
             .child(
                 div()
-                    .font_family("Georgia")
+                    .font_weight(FontWeight::SEMIBOLD)
                     .text_size(px(28.))
                     .child("Reports"),
             )
             .child(
                 div().child(
                     "Review complete saved days and movements within a business date range.",
+                ),
+            )
+            .child(
+                h_flex().gap_2().flex_wrap().children(
+                    [
+                        ("report-today", "Today", ReportPeriod::Today),
+                        (
+                            "report-seven-days",
+                            "Last 7 days",
+                            ReportPeriod::LastSevenDays,
+                        ),
+                        ("report-month", "This month", ReportPeriod::ThisMonth),
+                    ]
+                    .into_iter()
+                    .map(|(id, label, period)| {
+                        Button::new(id)
+                            .label(label)
+                            .disabled(self.busy)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.set_report_period(
+                                    period,
+                                    Local::now().date_naive(),
+                                    window,
+                                    cx,
+                                )
+                            }))
+                    }),
                 ),
             )
             .child(
@@ -656,6 +855,7 @@ impl RegisterApp {
                     .child(
                         Button::new("generate-report")
                             .primary()
+                            .icon(IconName::FileText)
                             .label("Generate report")
                             .disabled(self.busy || self.selection.register.is_none())
                             .loading(self.busy)
@@ -666,6 +866,7 @@ impl RegisterApp {
                     .child(
                         Button::new("export-report")
                             .label("Export CSV")
+                            .icon(IconName::ArrowDown)
                             .disabled(self.busy || self.report_data.is_none())
                             .on_click(
                                 cx.listener(|this, _, window, cx| this.export_report(window, cx)),
@@ -702,34 +903,64 @@ impl RegisterApp {
                         .py_4()
                         .border_b_1()
                         .border_color(rgb(0xdde3dc))
-                        .child(div().font_weight(FontWeight::SEMIBOLD).child(format!(
-                            "{} · {}",
-                            session.business_date, session.register_name
-                        )))
-                        .child(div().font_family("Consolas").child(format!(
-                            "Opening {} · In {} · Out {} · Expected {} ({})",
-                            cash_counter::register::money::format_amount(session.opening),
-                            cash_counter::register::money::format_amount(session.cash_in),
-                            cash_counter::register::money::format_amount(session.cash_out),
-                            cash_counter::register::money::format_amount(session.expected),
-                            session.currency
-                        )))
                         .child(
-                            div().child(
-                                session
-                                    .counted
-                                    .map(|counted| {
-                                        format!(
-                                            "Counted {} · Difference {}",
-                                            cash_counter::register::money::format_amount(counted),
-                                            session
-                                                .difference
-                                                .map(cash_counter::register::money::format_amount)
-                                                .unwrap_or_default()
-                                        )
-                                    })
-                                    .unwrap_or_else(|| "Open day · final count pending".into()),
-                            ),
+                            h_flex()
+                                .gap_3()
+                                .flex_wrap()
+                                .child(div().font_weight(FontWeight::SEMIBOLD).child(format!(
+                                    "{} · {}",
+                                    session.business_date, session.register_name
+                                )))
+                                .child(if session.counted.is_some() {
+                                    Tag::secondary().child("Closed")
+                                } else {
+                                    Tag::success().child("Open")
+                                }),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .child(format!("Amounts in {}", session.currency)),
+                        )
+                        .child(
+                            DescriptionList::vertical()
+                                .columns(3)
+                                .item(
+                                    "Opening",
+                                    cash_counter::register::money::format_amount(session.opening),
+                                    1,
+                                )
+                                .item(
+                                    "Cash in",
+                                    cash_counter::register::money::format_amount(session.cash_in),
+                                    1,
+                                )
+                                .item(
+                                    "Cash out",
+                                    cash_counter::register::money::format_amount(session.cash_out),
+                                    1,
+                                )
+                                .item(
+                                    "Expected",
+                                    cash_counter::register::money::format_amount(session.expected),
+                                    1,
+                                )
+                                .item(
+                                    "Counted",
+                                    session
+                                        .counted
+                                        .map(cash_counter::register::money::format_amount)
+                                        .unwrap_or_else(|| "Pending".into()),
+                                    1,
+                                )
+                                .item(
+                                    "Difference",
+                                    session
+                                        .difference
+                                        .map(cash_counter::register::money::format_amount)
+                                        .unwrap_or_else(|| "Pending".into()),
+                                    1,
+                                ),
                         ),
                 );
             }

@@ -1,11 +1,13 @@
 //! Native GPUI workspace. Storage operations are serialized on the background executor.
 
 mod company_views;
+mod components;
 #[cfg(test)]
 mod tests;
 mod update_views;
 mod views;
 use company_views::{Access, Page};
+use components::{RegisterChoice, ReportPeriod};
 
 use cash_counter::database::Direction;
 use cash_counter::register::{
@@ -13,7 +15,12 @@ use cash_counter::register::{
 };
 use chrono::{Local, NaiveDate};
 use gpui::*;
-use gpui_component::input::InputState;
+use gpui_component::input::{InputEvent, InputState};
+use gpui_component::{
+    IndexPath,
+    searchable_list::SearchableVec,
+    select::{SelectEvent, SelectState},
+};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -39,7 +46,8 @@ pub struct RegisterApp {
     rules: Entity<InputState>,
     tolerance: Entity<InputState>,
     printer: Entity<InputState>,
-    paper: Entity<InputState>,
+    paper: Entity<SelectState<Vec<&'static str>>>,
+    settings_sections: Vec<usize>,
     username: Entity<InputState>,
     password: Entity<InputState>,
     confirmation: Entity<InputState>,
@@ -47,6 +55,7 @@ pub struct RegisterApp {
     report_end: Entity<InputState>,
     report_data: Option<cash_counter::reporting::Report>,
     report_register: Option<i64>,
+    report_selector: Entity<SelectState<SearchableVec<RegisterChoice>>>,
     service: Arc<Mutex<Option<RegisterService>>>,
     path: Result<PathBuf, String>,
     snapshot: Option<Snapshot>,
@@ -95,7 +104,10 @@ impl RegisterApp {
             tolerance: cx.new(|cx| InputState::new(window, cx).default_value("0.00")),
             printer: cx
                 .new(|cx| InputState::new(window, cx).placeholder("Blank uses the system default")),
-            paper: cx.new(|cx| InputState::new(window, cx).default_value("A4")),
+            paper: cx.new(|cx| {
+                SelectState::new(vec!["A4", "Letter"], Some(IndexPath::default()), window, cx)
+            }),
+            settings_sections: vec![0],
             username: cx.new(|cx| InputState::new(window, cx).placeholder("Username")),
             password: cx.new(|cx| InputState::new(window, cx).masked(true)),
             confirmation: cx.new(|cx| InputState::new(window, cx).masked(true)),
@@ -109,6 +121,18 @@ impl RegisterApp {
             }),
             report_data: None,
             report_register: None,
+            report_selector: cx.new(|cx| {
+                SelectState::new(
+                    SearchableVec::new(vec![RegisterChoice {
+                        id: None,
+                        name: "All registers".into(),
+                    }]),
+                    Some(IndexPath::default()),
+                    window,
+                    cx,
+                )
+                .searchable(true)
+            }),
             service: Arc::new(Mutex::new(None)),
             path,
             snapshot: None,
@@ -136,7 +160,56 @@ impl RegisterApp {
             entry_pages: Vec::new(),
             session_pages: Vec::new(),
         };
+        // Single-line inputs consume Enter; use their event rather than a parent binding.
+        for input in [&app.username, &app.password] {
+            cx.subscribe_in(input, window, |app, _, event: &InputEvent, window, cx| {
+                if app.access == Access::Login
+                    && matches!(
+                        event,
+                        InputEvent::PressEnter {
+                            secondary: false,
+                            shift: false
+                        }
+                    )
+                {
+                    app.submit_access(window, cx);
+                }
+            })
+            .detach();
+        }
         app.load_company(window, cx);
+        for input in [&app.report_start, &app.report_end] {
+            cx.subscribe_in(input, window, |app, _, event: &InputEvent, _, cx| {
+                if matches!(event, InputEvent::Change) && !app.busy {
+                    // A preview must always correspond to the visible report filters.
+                    app.report_data = None;
+                    cx.notify();
+                }
+            })
+            .detach();
+        }
+        cx.subscribe_in(
+            &app.paper,
+            window,
+            |_, _, _: &SelectEvent<Vec<&'static str>>, _, cx| cx.notify(),
+        )
+        .detach();
+        cx.subscribe_in(
+            &app.report_selector,
+            window,
+            |app, _, event: &SelectEvent<SearchableVec<RegisterChoice>>, _, cx| {
+                if app.busy || app.access != Access::Authenticated {
+                    return;
+                }
+                let SelectEvent::Confirm(Some(register)) = event else {
+                    return;
+                };
+                app.report_register = *register;
+                app.report_data = None;
+                cx.notify();
+            },
+        )
+        .detach();
         app
     }
 
@@ -232,6 +305,7 @@ impl RegisterApp {
                 } else if snapshot.session.is_none() {
                     self.mode = FormMode::Open;
                 }
+                self.refresh_report_registers(&snapshot, window, cx);
                 self.snapshot = Some(snapshot);
             }
             Err(error) => {
