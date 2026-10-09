@@ -10,23 +10,22 @@ repository are named `cash-counter`.
    with `cargo check`. Preserve third-party dependency versions.
 2. Add `releases/vX.Y.Z.md` describing implemented changes and known limitations.
 3. Run formatting, checks, Clippy and tests, then commit and push to `main`.
-4. Wait for the CI workflow to pass for that commit.
-5. Create an annotated tag and push it:
+4. CI runs checks, then installer packaging, then the reusable Release workflow
+   sequentially in the same run. No manual tag push or separate release run is
+   required. Pull requests run checks and packaging without publishing.
 
-```sh
-git tag -a vX.Y.Z -m "Cash Ledger X.Y.Z"
-git push origin vX.Y.Z
-```
+After checks and packaging succeed on main, the release job reads the manifest
+version, requires matching release notes, and verifies SHA-256 checksums of the
+installer artifact from that run. It creates `vX.Y.Z` at the tested commit,
+uploads assets to a draft, and publishes it as the latest release. An existing
+tag must point to the same tested commit; published tags are never moved.
+Rerunning the same published commit leaves its release unchanged. A new commit
+for distribution needs a new version and release notes.
 
-CI also validates installer creation through the reusable package workflow, so
-packaging failures are caught before tagging. Release uses the same package job.
-
-The Release workflow independently repeats all checks for the tagged commit,
-verifies the version, builds a Windows x64 installer and dependency notices,
-and uploads an Actions artifact. A separate job with `contents: write` verifies
-SHA-256 checksums, creates a draft with the assets, and publishes only after
-uploads succeed. Other jobs receive read-only repository access. Checkout
-credentials are not persisted. Fork PRs use the ordinary `pull_request` event.
+Only the release job receives `contents: write`; checks and packaging remain
+read-only. Checkout credentials are not persisted. Fork PRs use the ordinary
+`pull_request` event. Runs are serialized per branch and are not automatically
+cancelled while publishing.
 
 If a build fails, inspect the failed job logs and fix the cause. Rerun transient
 failures. Do not move an existing published version tag; publish a new patch

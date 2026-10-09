@@ -4,7 +4,9 @@ use cash_counter::company::{CompanyProfile, CompanyService, SetupCompany};
 use gpui_component::{
     Disableable, Selectable,
     button::{Button, ButtonVariants},
-    h_flex, v_flex,
+    h_flex,
+    scroll::Scrollbar,
+    v_flex,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -287,7 +289,7 @@ impl RegisterApp {
         } else {
             "Sign in"
         };
-        let mut form = v_flex().w(px(470.)).max_w_full().gap_5().p_8()
+        let mut form = v_flex().w(px(470.)).max_w_full().flex_shrink_0().gap_5().p_8()
             .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child("Cash Ledger"))
             .child(div().font_family("Georgia").text_size(px(30.)).child(title))
             .child(div().text_color(rgb(0x61716a)).child(if company { "Company details and cash handling guidance for your local workspace." } else if setup { "This account protects access on this computer. Use a password of at least 12 characters." } else { "Enter your local account to open the cash register." }));
@@ -335,13 +337,19 @@ impl RegisterApp {
                     })),
             );
         }
+        // Keep the form at its natural height inside a viewport-sized scroll region.
         div()
-            .id("access-scroll")
+            .relative()
             .size_full()
-            .overflow_y_scroll()
-            .flex()
-            .justify_center()
-            .child(form)
+            .child(
+                div()
+                    .id("access-scroll")
+                    .size_full()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.access_scroll)
+                    .child(h_flex().w_full().items_start().justify_center().child(form)),
+            )
+            .child(Scrollbar::vertical(&self.access_scroll))
             .into_any_element()
     }
 

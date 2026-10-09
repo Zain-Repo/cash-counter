@@ -31,6 +31,7 @@ enum FormMode {
 
 pub struct RegisterApp {
     access: Access,
+    access_scroll: ScrollHandle,
     page: Page,
     profile: Option<cash_counter::company::CompanyProfile>,
     company: Entity<InputState>,
@@ -83,6 +84,7 @@ impl RegisterApp {
     ) -> Self {
         let today = Local::now().format("%Y-%m-%d").to_string();
         let mut app = Self {
+            access_scroll: ScrollHandle::default(),
             access: Access::Loading,
             page: Page::Register,
             profile: None,

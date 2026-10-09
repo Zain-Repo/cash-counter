@@ -12,6 +12,9 @@ are stored as salted Argon2id password hashes, rather than plaintext.
 Later launches require sign-in before displaying the workspace. Sign out when
 leaving the register unattended.
 
+Setup and sign-in forms scroll vertically when they exceed the window height.
+Use the mouse wheel, trackpad, or vertical scrollbar to reach the bottom controls.
+
 There is one local administrator account. This is application access control,
 not database encryption: protect the Windows account and database backups.
 There is no cloud identity service or email password recovery. Preserve your

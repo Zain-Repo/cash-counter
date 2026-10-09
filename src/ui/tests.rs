@@ -86,6 +86,23 @@ fn first_run_requires_company_administrator_and_sign_in(cx: &mut TestAppContext)
     let app = app.unwrap();
     let mut visual = VisualTestContext::from_window(window.into(), cx);
     visual.run_until_parked();
+    for height in [420., 600.] {
+        visual.simulate_resize(size(px(860.), px(height)));
+        visual.update(|window, cx| {
+            let _ = window.draw(cx);
+        });
+        app.update_in(&mut visual, |app, _, _| {
+            assert!(app.access == Access::Company);
+            assert!(app.access_scroll.max_offset().y > px(0.));
+            let maximum = app.access_scroll.max_offset();
+            app.access_scroll
+                .set_offset(gpui::point(px(0.), -maximum.y));
+            assert_eq!(app.access_scroll.offset().y, -maximum.y);
+            let content = app.access_scroll.bounds_for_item(0).unwrap();
+            let viewport = app.access_scroll.bounds();
+            assert!(content.bottom() + app.access_scroll.offset().y <= viewport.bottom() + px(1.));
+        });
+    }
     app.update_in(&mut visual, |app, window, cx| {
         assert!(app.access == Access::Company);
         app.submit_access(window, cx);
