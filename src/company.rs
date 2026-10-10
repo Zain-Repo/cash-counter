@@ -278,10 +278,11 @@ fn validate_username(username: &str) -> Result<&str> {
     }
     Ok(username)
 }
-fn validate_password(password: &str) -> Result<()> {
-    if password.chars().count() < 12 || password.len() > 1024 {
+/// Validates the password length accepted by company setup and password changes.
+pub fn validate_password(password: &str) -> Result<()> {
+    if password.chars().count() < 6 || password.len() > 1024 {
         return Err(CompanyError::InvalidInput(
-            "Password must contain at least 12 characters and at most 1024 bytes",
+            "Password must contain at least 6 characters and at most 1024 bytes",
         ));
     }
     Ok(())
@@ -342,6 +343,47 @@ mod tests {
             .unwrap();
         assert!(hash.starts_with("$argon2id$"));
         assert!(!hash.contains("long test password"));
+    }
+
+    #[test]
+    fn password_length_boundaries_apply_to_setup_and_changes() {
+        let mut service = CompanyService::open(":memory:").unwrap();
+
+        let mut invalid_setup = setup();
+        invalid_setup.password = "12345".into();
+        assert!(matches!(
+            service.setup(invalid_setup),
+            Err(CompanyError::InvalidInput(_))
+        ));
+        assert!(service.profile().unwrap().is_none());
+
+        let mut valid_setup = setup();
+        valid_setup.password = "123456".into();
+        service.setup(valid_setup).unwrap();
+
+        assert!(matches!(
+            service.change_password("admin", "123456", "12345"),
+            Err(CompanyError::InvalidInput(_))
+        ));
+        assert!(
+            service
+                .change_password("admin", "123456", "654321")
+                .unwrap()
+        );
+        assert!(
+            service
+                .change_password("admin", "654321", &"x".repeat(1024))
+                .unwrap()
+        );
+        assert!(matches!(
+            service.change_password("admin", &"x".repeat(1024), &"x".repeat(1025)),
+            Err(CompanyError::InvalidInput(_))
+        ));
+
+        assert!(validate_password("ééééé").is_err());
+        assert!(validate_password("éééééé").is_ok());
+        assert!(validate_password(&"é".repeat(512)).is_ok());
+        assert!(validate_password(&"é".repeat(513)).is_err());
     }
     #[test]
     fn settings_and_password_changes_validate_and_persist() {

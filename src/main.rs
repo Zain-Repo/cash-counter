@@ -3,10 +3,11 @@
     windows_subsystem = "windows"
 )]
 
+mod theme;
 mod ui;
 
 use gpui::*;
-use gpui_component::{Root, Theme, ThemeMode};
+use gpui_component::Root;
 use gpui_component_assets::Assets;
 
 fn main() {
@@ -27,16 +28,7 @@ fn main() {
     };
     gpui_platform::application().with_assets(Assets).run(|cx| {
         gpui_component::init(cx);
-        Theme::change(ThemeMode::Light, None, cx);
-        let theme = Theme::global_mut(cx);
-        theme.colors.primary = rgb(0x265746).into();
-        theme.colors.primary_foreground = rgb(0xffffff).into();
-        theme.colors.ring = rgb(0x265746).into();
-        theme.radius = px(6.);
-        theme.font_size = px(14.);
-        theme.font_family = "Segoe UI".into();
-        theme.tokens = gpui_component::theme::ThemeTokens::from(&theme.colors);
-        Theme::sync_base(cx);
+        theme::setup(cx);
         cx.bind_keys([
             KeyBinding::new("ctrl-enter", ui::SubmitForm, Some("CashRegister")),
             KeyBinding::new("escape", ui::CancelForm, Some("CashRegister")),

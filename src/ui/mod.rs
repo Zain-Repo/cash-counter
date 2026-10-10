@@ -1,8 +1,15 @@
 //! Native GPUI workspace. Storage operations are serialized on the background executor.
 
+#[cfg(test)]
+mod backup_tests;
+mod backup_views;
 mod company_views;
 mod components;
 mod dashboard_views;
+#[cfg(test)]
+mod restore_tests;
+mod restore_views;
+mod settings_views;
 #[cfg(test)]
 mod tests;
 mod update_views;
@@ -46,6 +53,17 @@ pub struct RegisterApp {
     dashboard_timer: Option<Task<()>>,
     backup_task: Option<Task<()>>,
     backup_working: bool,
+    backups: backup_views::Backups,
+    backup_settings_task: Option<Task<()>>,
+    backup_timer: Option<Task<()>>,
+    backup_directory: Entity<InputState>,
+    backup_frequency: Entity<SelectState<Vec<&'static str>>>,
+    backup_automatic: bool,
+    restore_source: Entity<InputState>,
+    restore_working: bool,
+    restore_task: Option<Task<()>>,
+    settings_initial_page: usize,
+    settings_generation: u64,
     profile: Option<cash_counter::company::CompanyProfile>,
     company: Entity<InputState>,
     address: Entity<InputState>,
@@ -53,7 +71,6 @@ pub struct RegisterApp {
     tolerance: Entity<InputState>,
     printer: Entity<InputState>,
     paper: Entity<SelectState<Vec<&'static str>>>,
-    settings_sections: Vec<usize>,
     username: Entity<InputState>,
     password: Entity<InputState>,
     confirmation: Entity<InputState>,
@@ -107,6 +124,27 @@ impl RegisterApp {
             dashboard_timer: None,
             backup_task: None,
             backup_working: false,
+            backups: backup_views::Backups::default(),
+            backup_settings_task: None,
+            backup_timer: None,
+            backup_directory: cx
+                .new(|cx| InputState::new(window, cx).placeholder("Choose a backup folder")),
+            backup_frequency: cx.new(|cx| {
+                SelectState::new(
+                    vec!["Hourly", "Every 6 hours", "Daily", "Weekly"],
+                    Some(IndexPath::new(2)),
+                    window,
+                    cx,
+                )
+            }),
+            backup_automatic: false,
+            restore_source: cx.new(|cx| {
+                InputState::new(window, cx).placeholder("Choose a backup file or folder")
+            }),
+            restore_working: false,
+            restore_task: None,
+            settings_initial_page: 0,
+            settings_generation: 0,
             profile: None,
             company: cx.new(|cx| InputState::new(window, cx).placeholder("Company name")),
             address: cx.new(|cx| InputState::new(window, cx).placeholder("Address (optional)")),
@@ -118,7 +156,6 @@ impl RegisterApp {
             paper: cx.new(|cx| {
                 SelectState::new(vec!["A4", "Letter"], Some(IndexPath::default()), window, cx)
             }),
-            settings_sections: vec![0],
             username: cx.new(|cx| InputState::new(window, cx).placeholder("Username")),
             password: cx.new(|cx| InputState::new(window, cx).masked(true)),
             confirmation: cx.new(|cx| InputState::new(window, cx).masked(true)),
@@ -201,6 +238,12 @@ impl RegisterApp {
         }
         cx.subscribe_in(
             &app.paper,
+            window,
+            |_, _, _: &SelectEvent<Vec<&'static str>>, _, cx| cx.notify(),
+        )
+        .detach();
+        cx.subscribe_in(
+            &app.backup_frequency,
             window,
             |_, _, _: &SelectEvent<Vec<&'static str>>, _, cx| cx.notify(),
         )
@@ -331,6 +374,7 @@ impl RegisterApp {
                 );
             }
         }
+        self.run_configured_backup(true, window, cx);
         self.resume_ready_update(window, cx);
         cx.notify();
     }

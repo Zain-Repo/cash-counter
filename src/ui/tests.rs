@@ -3,7 +3,10 @@ use gpui::{AppContext, Entity, TestAppContext, VisualTestContext, WindowOptions,
 use gpui_component::Root;
 use std::path::PathBuf;
 
-fn workspace(cx: &mut TestAppContext, path: PathBuf) -> (Entity<RegisterApp>, VisualTestContext) {
+pub(super) fn workspace(
+    cx: &mut TestAppContext,
+    path: PathBuf,
+) -> (Entity<RegisterApp>, VisualTestContext) {
     let mut service = cash_counter::company::CompanyService::open(&path).unwrap();
     service
         .setup(cash_counter::company::SetupCompany {
@@ -16,6 +19,7 @@ fn workspace(cx: &mut TestAppContext, path: PathBuf) -> (Entity<RegisterApp>, Vi
         })
         .unwrap();
     cx.update(gpui_component::init);
+    cx.update(crate::theme::setup);
     let mut app = None;
     let window = cx.update(|cx| {
         cx.open_window(WindowOptions::default(), |window, cx| {
@@ -169,14 +173,12 @@ fn paper_select_saves_and_blocks_restart_while_unsaved(cx: &mut TestAppContext) 
             state.set_selected_value(&"Letter", window, cx)
         });
         assert!(!app.can_restart_for_update(cx));
-        app.settings_sections = vec![2];
         app.save_settings(window, cx);
     });
     visual.run_until_parked();
     app.update_in(&mut visual, |app, _, cx| {
         assert!(app.error.is_none());
         assert_eq!(app.profile.as_ref().unwrap().paper_size, "Letter");
-        assert_eq!(app.settings_sections, vec![2]);
         assert!(app.can_restart_for_update(cx));
     });
     assert_eq!(
@@ -304,18 +306,25 @@ fn first_run_requires_company_administrator_and_sign_in(cx: &mut TestAppContext)
         assert!(app.access == Access::Administrator);
         app.username
             .update(cx, |input, cx| input.set_value("admin", window, cx));
-        app.password.update(cx, |input, cx| {
-            input.set_value("administrator test password", window, cx)
-        });
+        for input in [&app.password, &app.confirmation] {
+            input.update(cx, |input, cx| input.set_value("12345", window, cx));
+        }
+        app.submit_access(window, cx);
+        assert_eq!(
+            app.error.as_deref(),
+            Some("Password must contain at least 6 characters and at most 1024 bytes")
+        );
+        assert!(!app.busy);
+        app.password
+            .update(cx, |input, cx| input.set_value("123456", window, cx));
         app.confirmation.update(cx, |input, cx| {
             input.set_value("different password", window, cx)
         });
         app.submit_access(window, cx);
         assert!(app.error.is_some());
         assert!(!app.busy);
-        app.confirmation.update(cx, |input, cx| {
-            input.set_value("administrator test password", window, cx)
-        });
+        app.confirmation
+            .update(cx, |input, cx| input.set_value("123456", window, cx));
         app.submit_access(window, cx);
     });
     visual.run_until_parked();
@@ -323,9 +332,8 @@ fn first_run_requires_company_administrator_and_sign_in(cx: &mut TestAppContext)
         assert!(app.access == Access::Login);
         assert!(app.snapshot.is_none());
         assert!(app.password.read(cx).value().is_empty());
-        app.password.update(cx, |input, cx| {
-            input.set_value("administrator test password", window, cx)
-        });
+        app.password
+            .update(cx, |input, cx| input.set_value("123456", window, cx));
         app.submit_access(window, cx);
     });
     visual.run_until_parked();

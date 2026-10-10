@@ -1,8 +1,19 @@
 //! Shared component state and reporting shortcuts for the native workspace.
 
 use chrono::{Datelike, Days, NaiveDate};
-use gpui::SharedString;
-use gpui_component::searchable_list::SearchableListItem;
+use gpui::{App, Div, SharedString, Styled as _, div};
+use gpui_component::{ActiveTheme, searchable_list::SearchableListItem};
+
+/// A theme-aware content surface for the register's cards and panels.
+pub(super) fn panel(cx: &App) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .bg(cx.theme().background)
+        .border_1()
+        .border_color(cx.theme().border)
+        .rounded(cx.theme().radius_lg)
+}
 
 /// Register names are presentation only; selection always uses the database identity.
 #[derive(Clone)]

@@ -1,9 +1,8 @@
 use super::views::input_field;
 use super::*;
-use cash_counter::company::{CompanyProfile, CompanyService, SetupCompany};
+use cash_counter::company::{CompanyProfile, CompanyService, SetupCompany, validate_password};
 use gpui_component::{
     Disableable, IconName,
-    accordion::Accordion,
     alert::Alert,
     button::{Button, ButtonVariants},
     description_list::DescriptionList,
@@ -158,6 +157,11 @@ impl RegisterApp {
         let setup = self.access == Access::Administrator;
         let username = self.username.read(cx).value().to_string();
         let password = self.password.read(cx).value().to_string();
+        if setup && let Err(error) = validate_password(&password) {
+            self.error = Some(error.to_string());
+            cx.notify();
+            return;
+        }
         if setup && password != self.confirmation.read(cx).value().as_ref() {
             self.error = Some("The passwords do not match. Enter them again.".into());
             cx.notify();
@@ -222,6 +226,7 @@ impl RegisterApp {
                         view.populate_settings(window, cx);
                         view.access = Access::Authenticated;
                         view.run(Operation::Refresh, window, cx);
+                        view.load_backup_settings(window, cx);
                     }
                     Ok(None) => view.error = Some("Sign in failed. Check your username and password. After repeated attempts, wait 30 seconds before retrying.".into()),
                     Err(error) => view.error = Some(error),
@@ -239,8 +244,15 @@ impl RegisterApp {
         let profile = match self.edited_profile(cx) {
             Ok(profile) => profile,
             Err(error) => {
-                // Reveal every section so a validation error never points to a hidden field.
-                self.settings_sections = vec![0, 1, 2];
+                self.settings_initial_page =
+                    if error.contains("company name") || error.contains("Address") {
+                        0
+                    } else if error.contains("paper") {
+                        2
+                    } else {
+                        1
+                    };
+                self.settings_generation += 1;
                 self.error = Some(error);
                 cx.notify();
                 return;
@@ -275,10 +287,22 @@ impl RegisterApp {
     }
 
     pub(super) fn logout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy || self.backup_working || self.failed_operation.is_some() {
+        if self.busy
+            || self.backup_working
+            || self.backups.loading
+            || self.failed_operation.is_some()
+        {
             return;
         }
         self.access = Access::Login;
+        self.backup_timer = None;
+        self.backup_settings_task = None;
+        self.backups = backup_views::Backups::default();
+        self.backup_directory
+            .update(cx, |input, cx| input.set_value("", window, cx));
+        self.backup_automatic = false;
+        self.restore_source
+            .update(cx, |input, cx| input.set_value("", window, cx));
         self.clear_dashboard();
         self.page = Page::Register;
         self.snapshot = None;
@@ -328,11 +352,10 @@ impl RegisterApp {
         } else {
             "Sign in"
         };
-        let mut form = v_flex().w(px(470.)).max_w_full().flex_shrink_0().gap_5().p_8()
-            .bg(rgb(0xffffff)).border_1().border_color(rgb(0xdde3dc)).rounded_lg()
+        let mut form = super::components::panel(cx).w(px(470.)).max_w_full().flex_shrink_0().gap_5().p_8()
             .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child("Cash Ledger"))
             .child(div().text_size(px(30.)).font_weight(FontWeight::SEMIBOLD).child(title))
-            .child(div().text_color(rgb(0x61716a)).child(if company { "Company details and cash handling guidance for your local workspace." } else if setup { "This account protects access on this computer. Use a password of at least 12 characters." } else { "Enter your local account to open the cash register." }));
+            .child(div().text_color(rgb(crate::theme::MUTED_FOREGROUND)).child(if company { "Company details and cash handling guidance for your local workspace." } else if setup { "This account protects access on this computer. Use a password of at least 6 characters." } else { "Enter your local account to open the cash register." }));
         if company {
             form = form.child(self.company_fields());
         } else if self.access != Access::Loading {
@@ -439,21 +462,21 @@ impl RegisterApp {
             )
     }
 
-    fn company_details(&self) -> impl IntoElement {
+    pub(super) fn company_details(&self) -> impl IntoElement {
         v_flex()
             .gap_4()
             .child(input_field("Company name", &self.company, self.busy))
             .child(input_field("Company address", &self.address, self.busy))
     }
 
-    fn cash_handling_fields(&self) -> impl IntoElement {
+    pub(super) fn cash_handling_fields(&self) -> impl IntoElement {
         v_flex().gap_4()
             .child(input_field("Cash handling rules", &self.rules, self.busy))
             .child(input_field("Closing variance warning · CAD", &self.tolerance, self.busy))
             .child(div().text_sm().child("Warn when the final count differs by more than this amount. Rules are guidance for staff."))
     }
 
-    fn printing_fields(&self) -> impl IntoElement {
+    pub(super) fn printing_fields(&self) -> impl IntoElement {
         v_flex()
             .gap_4()
             .child(input_field(
@@ -471,72 +494,6 @@ impl RegisterApp {
                     ),
                 ),
             )
-    }
-
-    fn settings_fields(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        Accordion::new("company-settings")
-            .multiple(true)
-            .disabled(self.busy)
-            .item(|item| {
-                item.title("Company")
-                    .icon(IconName::Building2)
-                    .open(self.settings_sections.contains(&0))
-                    .child(self.company_details())
-            })
-            .item(|item| {
-                item.title("Cash handling")
-                    .icon(IconName::ChartPie)
-                    .open(self.settings_sections.contains(&1))
-                    .child(self.cash_handling_fields())
-            })
-            .item(|item| {
-                item.title("Printing")
-                    .icon(IconName::Settings2)
-                    .open(self.settings_sections.contains(&2))
-                    .child(self.printing_fields())
-            })
-            .on_toggle_click(cx.listener(|this, indices: &[usize], _, cx| {
-                this.settings_sections = indices.to_vec();
-                this.settings_sections.sort_unstable();
-                cx.notify();
-            }))
-    }
-
-    pub(super) fn settings_view(&self, cx: &mut Context<Self>) -> AnyElement {
-        div()
-            .id("settings-scroll")
-            .flex_1()
-            .overflow_y_scroll()
-            .p_8()
-            .child(
-                v_flex()
-                    .max_w(px(660.))
-                    .gap_5()
-                    .child(
-                        div()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_size(px(28.))
-                            .child("Settings"),
-                    )
-                    .child(div().child(
-                        "Configure your company, cash handling guidance and report printing.",
-                    ))
-                    .child(self.settings_fields(cx))
-                    .child(self.access_feedback())
-                    .child(
-                        Button::new("save-settings")
-                            .primary()
-                            .icon(IconName::Check)
-                            .label("Save settings")
-                            .loading(self.busy)
-                            .disabled(self.busy)
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.save_settings(window, cx)),
-                            ),
-                    )
-                    .child(self.updates_view(cx)),
-            )
-            .into_any_element()
     }
 
     pub(super) fn navigation(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -594,7 +551,12 @@ impl RegisterApp {
                     .label("Sign out")
                     .ghost()
                     .icon(IconName::ArrowRight)
-                    .disabled(self.busy || self.backup_working || self.failed_operation.is_some())
+                    .disabled(
+                        self.busy
+                            || self.backup_working
+                            || self.backups.loading
+                            || self.failed_operation.is_some(),
+                    )
                     .on_click(cx.listener(|this, _, window, cx| this.logout(window, cx))),
             )
     }
@@ -916,7 +878,7 @@ impl RegisterApp {
                         .gap_2()
                         .py_4()
                         .border_b_1()
-                        .border_color(rgb(0xdde3dc))
+                        .border_color(rgb(crate::theme::BORDER))
                         .child(
                             h_flex()
                                 .gap_3()
@@ -979,7 +941,7 @@ impl RegisterApp {
                 );
             }
         } else {
-            body = body.child(div().text_color(rgb(0x61716a)).child(
+            body = body.child(div().text_color(rgb(crate::theme::MUTED_FOREGROUND)).child(
                 "Generate a report to preview totals. Exports include every matching movement.",
             ));
         }

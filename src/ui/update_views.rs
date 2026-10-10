@@ -2,14 +2,7 @@
 
 use super::*;
 use cash_counter::updater::{self, AvailableUpdate, PreparedUpdate};
-use gpui_component::{
-    Disableable,
-    alert::Alert,
-    button::{Button, ButtonVariants},
-    h_flex,
-    switch::Switch,
-    v_flex,
-};
+use gpui_component::{alert::Alert, v_flex};
 use serde::{Deserialize, Serialize};
 use std::{io::Write, path::Path, time::Duration};
 
@@ -20,8 +13,8 @@ pub(super) struct Updates {
     pub installing: bool,
     pub status: String,
     pub error: Option<String>,
-    preference_error: Option<String>,
-    failure_notice: Option<String>,
+    pub(super) preference_error: Option<String>,
+    pub(super) failure_notice: Option<String>,
     failure_pause: bool,
     pub available: Option<AvailableUpdate>,
     pub prepared: Option<PreparedUpdate>,
@@ -234,7 +227,7 @@ impl RegisterApp {
         cx.notify();
     }
 
-    fn has_update_draft(&self, cx: &App) -> bool {
+    pub(super) fn has_update_draft(&self, cx: &App) -> bool {
         if matches!(
             self.access,
             Access::Loading | Access::Company | Access::Administrator
@@ -276,14 +269,14 @@ impl RegisterApp {
                     || self.report_end.read(cx).value().as_ref() != report.filter.end_date
                     || self.report_register != report.filter.register_id
             });
-        register_draft || settings_draft || report_draft
+        register_draft || settings_draft || report_draft || self.backup_settings_dirty(cx)
     }
 
     pub(super) fn can_restart_for_update(&self, cx: &App) -> bool {
         restart_is_safe(
-            self.busy || self.updates.working || self.backup_working,
+            self.busy || self.updates.working || self.backup_working || self.backups.loading,
             self.failed_operation.is_some(),
-            self.has_update_draft(cx),
+            self.has_update_draft(cx) || !self.restore_source.read(cx).value().is_empty(),
             self.updates.installing,
         )
     }
@@ -365,7 +358,7 @@ impl RegisterApp {
         cx.notify();
     }
 
-    fn toggle_updates(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn toggle_updates(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.updates.working || self.updates.installing {
             return;
         }
@@ -408,36 +401,6 @@ impl RegisterApp {
                     self.updates.status.clone(),
                 ))
         }))
-    }
-
-    pub(super) fn updates_view(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let blocked = !self.updates.enabled || self.updates.working || self.updates.installing;
-        v_flex().gap_3().mt_5().pt_5().border_t_1().border_color(rgb(0xdde3dc))
-            .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child("Updates"))
-            .child(div().child(format!("Cash Ledger · Version {}", env!("CARGO_PKG_VERSION"))))
-            .child(div().id("settings-update-status").role(Role::Status).child(Alert::info("settings-update-message", self.updates.status.clone())))
-            .children(self.updates.error.clone().map(|error| {
-                div().id("update-error").role(Role::Alert).child(Alert::error("update-error-message", error))
-            }))
-            .children(self.updates.preference_error.clone().map(|error| {
-                div().id("update-preference-error").role(Role::Alert).child(Alert::warning("update-preference-message", error))
-            }))
-            .children(self.updates.failure_notice.clone().map(|error| {
-                div().id("previous-update-error").role(Role::Alert).child(Alert::warning("previous-update-message", error).title("Automatic installation paused"))
-            }))
-            .child(h_flex().gap_3().flex_wrap()
-                .child(Switch::new("automatic-updates").label("Automatic updates")
-                    .checked(self.updates.automatic).disabled(blocked)
-                    .on_click(cx.listener(|this, _, window, cx| this.toggle_updates(window, cx))))
-                .child(Button::new("check-updates").label("Check for updates").loading(self.updates.working).disabled(blocked)
-                    .on_click(cx.listener(|this, _, window, cx| this.check_updates(window, cx))))
-                .children(self.updates.available.as_ref().map(|_| {
-                    Button::new("install-update").primary()
-                        .label(if self.updates.prepared.is_some() { "Install & restart" } else { "Download, install & restart" })
-                        .disabled(blocked || self.busy)
-                        .on_click(cx.listener(|this, _, window, cx| this.download_update(window, cx)))
-                })))
-            .child(div().text_sm().text_color(rgb(0x61716a)).child("Installed copies check at startup. Automatic updates download, verify and restart when your work is saved. Ledger data stays on this computer."))
     }
 }
 

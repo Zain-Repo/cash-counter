@@ -76,12 +76,21 @@ migrations roll back; deployment recovery should restore a verified backup using
 a compatible application version, rather than deleting financial records.
 
 SQLite files are not encrypted. Store them in a user-private application-data
-directory with appropriate OS permissions. The dashboard's Save verified backup action
+directory with appropriate OS permissions. Settings > Backups
 uses SQLite online backup, includes committed WAL records, verifies integrity,
 and publishes to a new destination without replacing existing files. For manual copies, close all connections
 before copying the database and any remaining WAL files as a consistent set, or
 use SQLite's online backup tooling. Do not copy only the main file while writers
-are active. Backup scheduling and encryption are not implemented in this phase.
+are active. Backup scheduling and recent outcomes use an additive
+`backup_service_state` table without changing the ledger migration version.
+Automatic backups run only while the app is open and signed in. Encryption is
+not implemented; see [backup settings](company-and-reports.md#backup-location-and-schedule).
+
+Restores stage and validate the selected backup before acquiring an exclusive
+SQLite lock on the live ledger. A verified safety snapshot is published before
+SQLite's backup API replaces the live contents. Other app instances must be
+closed. Current backup preferences are retained, and the user signs in again
+with the restored administrator credentials. See [restore data](company-and-reports.md#restore-data).
 
 ## Validation
 

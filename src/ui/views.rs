@@ -1,4 +1,8 @@
+use super::components::panel;
 use super::*;
+use crate::theme::{
+    BORDER, CANVAS, FOREGROUND, MUTED_FOREGROUND, MUTED_SURFACE, PRIMARY, PRIMARY_FOREGROUND,
+};
 use cash_counter::register::money::{format_amount, format_cad};
 use gpui::prelude::FluentBuilder;
 use gpui_component::{
@@ -12,12 +16,6 @@ use gpui_component::{
     v_flex,
 };
 
-const INK: u32 = 0x213b34;
-const MUTED: u32 = 0x61716a;
-const CANVAS: u32 = 0xf7f7f2;
-const LINE: u32 = 0xdde3dc;
-const GREEN: u32 = 0x265746;
-
 impl Render for RegisterApp {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if self.access != Access::Authenticated {
@@ -25,7 +23,7 @@ impl Render for RegisterApp {
                 .size_full()
                 .bg(rgb(CANVAS))
                 .font_family("Segoe UI")
-                .text_color(rgb(INK))
+                .text_color(rgb(FOREGROUND))
                 .key_context("CashRegister")
                 .on_action(
                     cx.listener(|this, _: &SubmitForm, window, cx| this.submit_access(window, cx)),
@@ -39,7 +37,7 @@ impl Render for RegisterApp {
                     .size_full()
                     .bg(rgb(CANVAS))
                     .font_family("Segoe UI")
-                    .text_color(rgb(INK))
+                    .text_color(rgb(FOREGROUND))
                     .child(self.navigation(cx))
                     .child(self.update_banner())
                     .child(self.dashboard_view(window, cx))
@@ -68,7 +66,7 @@ impl Render for RegisterApp {
                 .size_full()
                 .bg(rgb(CANVAS))
                 .font_family("Segoe UI")
-                .text_color(rgb(INK))
+                .text_color(rgb(FOREGROUND))
                 .child(self.navigation(cx))
                 .child(self.update_banner())
                 .child(page)
@@ -84,7 +82,7 @@ impl Render for RegisterApp {
             .child(self.update_banner())
             .child(self.header(cx))
             .child(self.feedback(cx))
-            .child(self.summary())
+            .child(self.summary(cx))
             .child(
                 div()
                     .id("workspace-scroll")
@@ -108,10 +106,10 @@ impl Render for RegisterApp {
                     .px_8()
                     .py_3()
                     .border_t_1()
-                    .border_color(rgb(LINE))
+                    .border_color(rgb(BORDER))
                     .justify_between()
                     .text_xs()
-                    .text_color(rgb(MUTED))
+                    .text_color(rgb(MUTED_FOREGROUND))
                     .child("Saved locally · CAD")
                     .child(if self.busy {
                         "Working…"
@@ -129,7 +127,7 @@ impl Render for RegisterApp {
             .size_full()
             .bg(rgb(CANVAS))
             .font_family("Segoe UI")
-            .text_color(rgb(INK))
+            .text_color(rgb(FOREGROUND))
             .text_size(px(14.))
             .child(self.sidebar(cx))
             .child(content)
@@ -177,18 +175,15 @@ impl RegisterApp {
                             Tag::success().child("Open day")
                         })
                     })
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(MUTED))
-                            .child(if session.is_none() {
-                                "A clear record of every cash movement."
-                            } else if closed {
-                                "Closed day · final count recorded"
-                            } else {
-                                "Open day · ready to record cash"
-                            }),
-                    ),
+                    .child(div().text_sm().text_color(rgb(MUTED_FOREGROUND)).child(
+                        if session.is_none() {
+                            "A clear record of every cash movement."
+                        } else if closed {
+                            "Closed day · final count recorded"
+                        } else {
+                            "Open day · ready to record cash"
+                        },
+                    )),
             )
             .child(
                 h_flex()
@@ -265,7 +260,7 @@ impl RegisterApp {
             })
     }
 
-    fn summary(&self) -> impl IntoElement {
+    fn summary(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let balance = self
             .snapshot
             .as_ref()
@@ -273,27 +268,28 @@ impl RegisterApp {
         h_flex()
             .flex_wrap()
             .px_8()
-            .py_6()
-            .gap_8()
-            .bg(rgb(0xedf0e9))
-            .border_y_1()
-            .border_color(rgb(LINE))
+            .py_3()
+            .gap_3()
             .child(metric(
+                cx,
                 "Expected in drawer",
                 balance.map(|balance| balance.expected),
                 true,
             ))
             .child(metric(
+                cx,
                 "Opening cash",
                 balance.map(|balance| balance.opening),
                 false,
             ))
             .child(metric(
+                cx,
                 "Cash in",
                 balance.map(|balance| balance.cash_in),
                 false,
             ))
             .child(metric(
+                cx,
                 "Cash out",
                 balance.map(|balance| balance.cash_out),
                 false,
@@ -301,7 +297,7 @@ impl RegisterApp {
             .when_some(
                 balance.and_then(|balance| balance.difference),
                 |element, difference| {
-                    element.child(metric("Count difference", Some(difference), false))
+                    element.child(metric(cx, "Count difference", Some(difference), false))
                 },
             )
     }
@@ -332,9 +328,9 @@ impl RegisterApp {
             .w(px(230.))
             .flex_shrink_0()
             .h_full()
-            .bg(rgb(0xeef0e9))
+            .bg(rgb(MUTED_SURFACE))
             .border_r_1()
-            .border_color(rgb(LINE))
+            .border_color(rgb(BORDER))
             .p_5()
             .gap_5()
             .child(
@@ -345,8 +341,8 @@ impl RegisterApp {
                         div()
                             .size(px(36.))
                             .rounded_md()
-                            .bg(rgb(GREEN))
-                            .text_color(rgb(0xffffff))
+                            .bg(rgb(PRIMARY))
+                            .text_color(rgb(PRIMARY_FOREGROUND))
                             .flex()
                             .items_center()
                             .justify_center()
@@ -364,7 +360,7 @@ impl RegisterApp {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(MUTED))
+                                    .text_color(rgb(MUTED_FOREGROUND))
                                     .child("Cash register"),
                             ),
                     ),
@@ -437,7 +433,7 @@ impl RegisterApp {
                 history = history.child(
                     div()
                         .text_sm()
-                        .text_color(rgb(MUTED))
+                        .text_color(rgb(MUTED_FOREGROUND))
                         .child("Your saved days will appear here."),
                 );
             }
@@ -481,16 +477,17 @@ impl RegisterApp {
             .child(
                 div()
                     .text_xs()
-                    .text_color(rgb(MUTED))
+                    .text_color(rgb(MUTED_FOREGROUND))
                     .child("Local workspace\nNo cloud account required"),
             )
     }
 
     fn ledger(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let blocked = self.busy || self.failed_operation.is_some();
-        let mut ledger = v_flex()
+        let mut ledger = panel(cx)
             .flex_1()
             .min_w_0()
+            .p_5()
             .gap_4()
             .child(
                 h_flex()
@@ -531,9 +528,9 @@ impl RegisterApp {
                     .py_3()
                     .gap_4()
                     .border_b_1()
-                    .border_color(rgb(LINE))
+                    .border_color(rgb(BORDER))
                     .text_xs()
-                    .text_color(rgb(MUTED))
+                    .text_color(rgb(MUTED_FOREGROUND))
                     .child(div().w(px(70.)).child("Time"))
                     .child(div().flex_1().child("Reason"))
                     .child(div().w(px(130.)).text_right().child("Amount (CAD)")),
@@ -559,12 +556,12 @@ impl RegisterApp {
                         .gap_4()
                         .items_start()
                         .border_b_1()
-                        .border_color(rgb(LINE))
+                        .border_color(rgb(BORDER))
                         .child(
                             div()
                                 .w(px(70.))
                                 .flex_shrink_0()
-                                .text_color(rgb(MUTED))
+                                .text_color(rgb(MUTED_FOREGROUND))
                                 .child(local_time(&entry.created_at)),
                         )
                         .child(div().min_w_0().flex_1().child(entry.reason.clone()))
@@ -574,7 +571,7 @@ impl RegisterApp {
                                 .flex_shrink_0()
                                 .text_right()
                                 .font_family("Consolas")
-                                .text_color(rgb(GREEN))
+                                .text_color(rgb(PRIMARY))
                                 .child(format!(
                                     "{}${}",
                                     if self.selection.direction == Direction::In {
@@ -606,7 +603,7 @@ impl RegisterApp {
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(MUTED))
+                            .text_color(rgb(MUTED_FOREGROUND))
                             .child("Saved cash entries appear here. Start with an opening count."),
                     ),
             );
@@ -620,7 +617,7 @@ impl RegisterApp {
                 .child(
                     div()
                         .text_xs()
-                        .text_color(rgb(MUTED))
+                        .text_color(rgb(MUTED_FOREGROUND))
                         .child("Newest first · local time"),
                 )
                 .child(
@@ -671,7 +668,7 @@ impl RegisterApp {
             .as_ref()
             .and_then(|snapshot| snapshot.session.as_ref())
             .is_some();
-        let mut form = v_flex().w(px(300.)).flex_shrink_0().gap_5();
+        let mut form = v_flex().gap_5();
         let (title, description, submit) = match self.mode {
             FormMode::Setup => (
                 "Set up your register",
@@ -715,7 +712,12 @@ impl RegisterApp {
                         .font_weight(FontWeight::SEMIBOLD)
                         .child(title),
                 )
-                .child(div().text_sm().text_color(rgb(MUTED)).child(description)),
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(MUTED_FOREGROUND))
+                        .child(description),
+                ),
         );
         match self.mode {
             FormMode::Setup => {
@@ -724,7 +726,7 @@ impl RegisterApp {
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(MUTED))
+                            .text_color(rgb(MUTED_FOREGROUND))
                             .child("Currency · CAD"),
                     )
             }
@@ -738,34 +740,36 @@ impl RegisterApp {
                     .child(input_field("Opening cash · CAD", &self.amount, blocked))
             }
             FormMode::Entry if closed || !has_session => {
-                return form.child(
-                    v_flex()
-                        .gap_3()
-                        .py_4()
-                        .child(if closed {
-                            "This day is closed. Its records are read-only."
-                        } else {
-                            "Open a day to begin recording cash."
-                        })
-                        .when_some(
-                            self.snapshot
-                                .as_ref()
-                                .and_then(|snapshot| snapshot.balance.as_ref())
-                                .and_then(|balance| balance.counted),
-                            |element, counted| {
-                                element.child(
-                                    div()
-                                        .font_family("Consolas")
-                                        .id("closed-count")
-                                        .role(Role::Group)
-                                        .aria_label(format!(
-                                            "Final counted cash: {} CAD",
-                                            format_cad(counted)
-                                        ))
-                                        .child(format!("Counted · {}", format_cad(counted))),
-                                )
-                            },
-                        ),
+                return panel(cx).w(px(300.)).flex_shrink_0().p_5().gap_5().child(
+                    form.child(
+                        v_flex()
+                            .gap_3()
+                            .py_4()
+                            .child(if closed {
+                                "This day is closed. Its records are read-only."
+                            } else {
+                                "Open a day to begin recording cash."
+                            })
+                            .when_some(
+                                self.snapshot
+                                    .as_ref()
+                                    .and_then(|snapshot| snapshot.balance.as_ref())
+                                    .and_then(|balance| balance.counted),
+                                |element, counted| {
+                                    element.child(
+                                        div()
+                                            .font_family("Consolas")
+                                            .id("closed-count")
+                                            .role(Role::Group)
+                                            .aria_label(format!(
+                                                "Final counted cash: {} CAD",
+                                                format_cad(counted)
+                                            ))
+                                            .child(format!("Counted · {}", format_cad(counted))),
+                                    )
+                                },
+                            ),
+                    ),
                 );
             }
             FormMode::Entry => {
@@ -794,7 +798,7 @@ impl RegisterApp {
                             .gap_3()
                             .py_4()
                             .border_y_1()
-                            .border_color(rgb(LINE))
+                            .border_color(rgb(BORDER))
                             .child(div().child(format!("Expected · {}", format_cad(expected))))
                             .child(div().child(format!("Counted · {}", format_cad(counted))))
                             .child(div().font_weight(FontWeight::SEMIBOLD).child(
@@ -807,7 +811,7 @@ impl RegisterApp {
                                     }
                                 },
                             ))
-                            .child(div().text_sm().text_color(rgb(MUTED)).child(
+                            .child(div().text_sm().text_color(rgb(MUTED_FOREGROUND)).child(
                                 "Closing is final. New movements cannot be added to this day.",
                             ))
                             .when(self.profile.as_ref().is_some_and(|profile| counted.checked_sub(expected).is_some_and(|difference| difference.unsigned_abs() > profile.closing_variance_threshold_cents as u64)), |element| {
@@ -820,50 +824,63 @@ impl RegisterApp {
                 }
             }
         }
-        form.child(
-            Button::new("submit-form")
-                .primary()
-                .w_full()
-                .h(px(42.))
-                .label(if self.failed_operation.is_some() {
-                    "Retry the same save"
-                } else {
-                    submit
-                })
-                .loading(self.busy)
-                .disabled(self.busy || self.snapshot.is_none())
-                .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
-        )
-        .when(self.mode != FormMode::Entry && has_session, |element| {
-            element.child(
-                Button::new("cancel-form")
-                    .ghost()
-                    .label("Cancel")
-                    .disabled(blocked)
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.change_mode(FormMode::Entry, window, cx)
-                    })),
+        panel(cx)
+            .w(px(300.))
+            .flex_shrink_0()
+            .p_5()
+            .gap_5()
+            .child(
+                form.child(
+                    Button::new("submit-form")
+                        .primary()
+                        .w_full()
+                        .h(px(42.))
+                        .label(if self.failed_operation.is_some() {
+                            "Retry the same save"
+                        } else {
+                            submit
+                        })
+                        .loading(self.busy)
+                        .disabled(self.busy || self.snapshot.is_none())
+                        .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
+                ),
             )
-        })
-        .child(
-            div()
-                .text_xs()
-                .text_color(rgb(MUTED))
-                .child("Amounts are saved exactly to the cent."),
-        )
+            .when(self.mode != FormMode::Entry && has_session, |element| {
+                element.child(
+                    Button::new("cancel-form")
+                        .ghost()
+                        .label("Cancel")
+                        .disabled(blocked)
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.change_mode(FormMode::Entry, window, cx)
+                        })),
+                )
+            })
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(MUTED_FOREGROUND))
+                    .child("Amounts are saved exactly to the cent."),
+            )
     }
 }
 
-fn metric(label: &'static str, amount: Option<i64>, primary: bool) -> impl IntoElement {
+fn metric(cx: &App, label: &'static str, amount: Option<i64>, primary: bool) -> impl IntoElement {
     let text = amount.map(format_cad).unwrap_or_else(|| "—".into());
-    v_flex()
+    panel(cx)
         .id(label)
         .role(Role::Group)
         .aria_label(format!("{label}: {text} CAD"))
         .gap_2()
-        .min_w(px(130.))
+        .min_w(px(148.))
         .flex_1()
-        .child(div().text_sm().text_color(rgb(MUTED)).child(label))
+        .p_4()
+        .child(
+            div()
+                .text_sm()
+                .text_color(rgb(MUTED_FOREGROUND))
+                .child(label),
+        )
         .child(
             div()
                 .font_family("Consolas")
@@ -881,7 +898,7 @@ fn section_label(label: &'static str) -> impl IntoElement {
     div()
         .text_xs()
         .font_weight(FontWeight::SEMIBOLD)
-        .text_color(rgb(MUTED))
+        .text_color(rgb(MUTED_FOREGROUND))
         .child(label)
 }
 fn friendly_date(date: &str) -> String {

@@ -1,6 +1,7 @@
 //! Bounded analytics reads use a separate connection and never hold the ledger mutex.
 
 use super::*;
+use crate::theme::{BORDER as LINE, MUTED_FOREGROUND as MUTED, PRIMARY as GREEN};
 use cash_counter::analytics::{self, DashboardFilter, DashboardSnapshot};
 use cash_counter::register::money::format_cad;
 use chrono::Days;
@@ -15,10 +16,6 @@ use gpui_component::{
     v_flex,
 };
 use std::time::Duration;
-
-const MUTED: u32 = 0x61716a;
-const LINE: u32 = 0xdde3dc;
-const GREEN: u32 = 0x265746;
 
 pub(super) struct Dashboard {
     days: u64,
@@ -55,44 +52,9 @@ impl RegisterApp {
     }
 
     fn save_backup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.access != Access::Authenticated || self.backup_working || self.busy {
-            return;
-        }
-        let source = match &self.path {
-            Ok(path) => path.clone(),
-            Err(error) => {
-                self.dashboard.error = Some(error.clone());
-                cx.notify();
-                return;
-            }
-        };
-        let filename = format!(
-            "ledger-backup-{}.sqlite",
-            Local::now().format("%Y%m%d-%H%M%S")
-        );
-        let picker = cx.prompt_for_new_path(
-            source.parent().unwrap_or(std::path::Path::new(".")),
-            Some(&filename),
-        );
-        self.backup_working = true;
-        self.notice = None;
-        self.backup_task = Some(cx.spawn_in(window, async move |view, cx| {
-            let result = match picker.await {
-                Ok(Ok(Some(destination))) => cx.background_executor().spawn(async move { cash_counter::backup::backup_database(&source, &destination).map(Some) }).await,
-                Ok(Ok(None)) => Ok(None),
-                _ => Err("Could not open the backup file picker. Try again.".into()),
-            };
-            let _ = view.update_in(cx, |view, _, cx| {
-                view.backup_working = false;
-                match result {
-                    Ok(Some(summary)) => view.notice = Some(format!("Verified backup saved to {} ({} bytes). Keep this file private; it contains your ledger and account data.", summary.path.display(), summary.size_bytes)),
-                    Ok(None) => {},
-                    Err(error) => view.dashboard.error = Some(error),
-                }
-                cx.notify();
-            });
-        }));
-        cx.notify();
+        self.settings_initial_page = 3;
+        self.settings_generation += 1;
+        self.navigate(Page::Settings, window, cx);
     }
     pub(super) fn refresh_dashboard(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.dashboard.working
@@ -160,60 +122,61 @@ impl RegisterApp {
     }
 
     pub(super) fn dashboard_view(&self, window: &Window, cx: &mut Context<Self>) -> AnyElement {
-        let mut content =
-            v_flex().gap_6().p_8().min_w_0().child(
-                h_flex()
-                    .flex_wrap()
-                    .gap_4()
-                    .justify_between()
-                    .child(
-                        v_flex()
-                            .gap_2()
-                            .child(
-                                div()
-                                    .text_size(px(28.))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child("Live cash dashboard"),
-                            )
-                            .child(div().text_sm().text_color(rgb(MUTED)).child(
+        let mut content = v_flex().gap_6().p_8().min_w_0().child(
+            h_flex()
+                .flex_wrap()
+                .gap_4()
+                .justify_between()
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_size(px(28.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("Live cash dashboard"),
+                        )
+                        .child(
+                            div().text_sm().text_color(rgb(MUTED)).child(
                                 "All registers · CAD · refreshes every 15 seconds while open",
-                            )),
-                    )
-                    .child(
-                        h_flex()
-                            .gap_2()
-                            .flex_wrap()
-                            .children([7_u64, 30, 90, 365].map(|days| {
-                                Button::new(("dashboard-range", days))
-                                    .label(format!("{days} days"))
-                                    .selected(self.dashboard.days == days)
-                                    .disabled(self.dashboard.working)
-                                    .on_click(cx.listener(move |view, _, window, cx| {
-                                        view.dashboard.days = days;
-                                        view.dashboard.data = None;
-                                        view.refresh_dashboard(window, cx);
-                                    }))
-                            }))
-                            .child(
-                                Button::new("dashboard-refresh")
-                                    .label("Refresh now")
-                                    .loading(self.dashboard.working)
-                                    .disabled(self.dashboard.working)
-                                    .on_click(cx.listener(|view, _, window, cx| {
-                                        view.refresh_dashboard(window, cx)
-                                    })),
-                            )
-                            .child(
-                                Button::new("dashboard-backup")
-                                    .label("Save verified backup")
-                                    .loading(self.backup_working)
-                                    .disabled(self.backup_working || self.busy)
-                                    .on_click(cx.listener(|view, _, window, cx| {
-                                        view.save_backup(window, cx)
-                                    })),
                             ),
-                    ),
-            );
+                        ),
+                )
+                .child(
+                    h_flex()
+                        .gap_2()
+                        .flex_wrap()
+                        .children([7_u64, 30, 90, 365].map(|days| {
+                            Button::new(("dashboard-range", days))
+                                .label(format!("{days} days"))
+                                .selected(self.dashboard.days == days)
+                                .disabled(self.dashboard.working)
+                                .on_click(cx.listener(move |view, _, window, cx| {
+                                    view.dashboard.days = days;
+                                    view.dashboard.data = None;
+                                    view.refresh_dashboard(window, cx);
+                                }))
+                        }))
+                        .child(
+                            Button::new("dashboard-refresh")
+                                .label("Refresh now")
+                                .loading(self.dashboard.working)
+                                .disabled(self.dashboard.working)
+                                .on_click(cx.listener(|view, _, window, cx| {
+                                    view.refresh_dashboard(window, cx)
+                                })),
+                        )
+                        .child(
+                            Button::new("dashboard-backup")
+                                .label("Backup settings")
+                                .loading(self.backup_working)
+                                .disabled(self.backup_working || self.backups.loading || self.busy)
+                                .on_click(
+                                    cx.listener(|view, _, window, cx| view.save_backup(window, cx)),
+                                ),
+                        ),
+                ),
+        );
         if let Some(error) = &self.dashboard.error {
             content = content.child(Alert::error("dashboard-error", error.clone()));
         }

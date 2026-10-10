@@ -23,7 +23,10 @@ movements, and reconcile the physical count before closing.
 - Configure company rules and printing, and generate date-range ledger reports.
 - View live cash-flow charts, register rankings, and closing discrepancies with
   bounded background refreshes and query timing.
-- Save a verified online backup without closing the application.
+- Choose a backup folder in Settings and create verified online snapshots manually
+  or automatically on an hourly, six-hourly, daily, or weekly schedule while signed in.
+- Restore the last backup or select a backup file or folder, with validation and
+  a safety snapshot of the current ledger before replacement.
 
 ## Install on Windows
 
@@ -62,7 +65,8 @@ Closing requires the explicit review stage. Closed days are read-only.
 Data stays on the local machine. On Windows, the default database is
 `%LOCALAPPDATA%/Cash Register/data/register.sqlite3`; see the
 [UI guide](docs/ui.md) for persistence and concurrency behavior.
-Use the dashboard backup action for a consistent online snapshot. For manual
+Use Settings > Backups for a consistent online snapshot. Automatic backups run
+while the app is open and signed in, with catch-up after sign-in. For manual
 file copies, back up the database when the application is closed.
 For development smoke tests, `CASH_REGISTER_DB` can point to an isolated database.
 

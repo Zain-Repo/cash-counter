@@ -7,7 +7,7 @@ company setup adds its own tables and does not change historical cash records.
 ## First use and sign-in
 
 Complete company setup once, including the company name and an administrator
-username and password. Passwords require at least 12 characters. Credentials
+username and password. Passwords require at least 6 characters. Credentials
 are stored as salted Argon2id password hashes, rather than plaintext.
 Later launches require sign-in before displaying the workspace. Sign out when
 leaving the register unattended.
@@ -44,12 +44,61 @@ while the dashboard is active and signed in. Query timing describes that read,
 not a guarantee for all database sizes. Queries have a ten-second execution
 deadline and a two-second lock timeout. Errors preserve the previous snapshot.
 
-Save verified backup saves a consistent online SQLite snapshot, including committed
-records in the WAL. Choose a new filename: existing destinations and SQLite
-sidecars are rejected. A temporary snapshot is checked for integrity before
-publication. Backups contain company credentials and financial data; store them
-with appropriate access restrictions. Backup scheduling, encryption, and an
-in-app restore workflow are not implemented.
+### Backup location and schedule
+
+Open **Settings > Backups** and choose an existing folder with **Browse folder**,
+or enter its full path. The folder must be writable. Save the backup settings
+before running a backup; selecting a folder alone does not change the saved policy.
+
+Manual mode creates a snapshot when you select **Back up now**. Enable
+**Automatic backups** and choose Hourly, Every 6 hours, Daily, or Weekly for a
+schedule. Saving a new automatic policy makes its first backup due immediately.
+Subsequent intervals run from the last successful completion. Manual backups
+remain available in automatic mode and also advance that schedule.
+
+Scheduling runs while Cash Ledger is open and signed in, across all workspace
+pages. Due work is checked at sign-in and every thirty seconds; busy operations
+can delay it. Missed intervals produce one catch-up backup rather than one file
+for every missed interval. Backups do not run after sign-out or while the app is
+closed. Failed automatic backups retry after five minutes. Settings shows the
+last successful backup, next scheduled attempt, and any error, with a manual
+retry action. Preferences and recent outcomes persist in the ledger database.
+
+Each run creates a uniquely named, consistent online SQLite snapshot, including
+committed records in the WAL. A temporary snapshot is checked for integrity
+before publication. Existing backups and live SQLite sidecars are never replaced.
+A database lease prevents overlapping backup runs from multiple application
+instances and expires after an interrupted run. Backup work runs in the
+background, and application updates wait for it to finish.
+
+The dashboard's **Backup settings** shortcut opens the Backups settings page.
+Backup files include company credentials and financial data. Keep the folder
+private and use a separate drive for protection against local disk failure.
+Files are retained until you remove them yourself; automatic pruning and encryption
+are not included.
+
+### Restore data
+
+In **Settings > Backups > Restore data**, select **Use last backup**, choose a
+backup file, or choose a folder. A folder selects its latest generated backup;
+the confirmation shows the exact file before any data is replaced. Folder selection
+uses the most recently modified generated snapshot and excludes pre-restore safety copies.
+
+Save or discard unsaved work first. **Restore data** replaces the ledger, company
+details and administrator accounts after confirmation. The backup is validated
+before restoring, and a verified `cash-counter-pre-restore-*` safety snapshot of
+the current ledger is saved beside the live database. Current backup preferences
+are preserved. Close other app instances before restoring so SQLite can lock the
+ledger exclusively. A successful restore signs you out; use the credentials from
+the restored backup to sign in again.
+
+### Settings navigation
+
+Settings uses the GPUI component library's searchable sidebar with pages for
+Company, Cash handling, Printing, Backups, and Updates. Company, cash handling,
+and printing pages each have a save action for the shared company preferences. Backup edits have their own
+save and discard actions; update preferences apply immediately. Unsaved backup
+preferences and a pending restore selection block an automatic application restart.
 
 The isolated synthetic workload example is described in [Performance testing](performance.md).
 

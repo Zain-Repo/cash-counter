@@ -13,7 +13,7 @@ Exact input, button, theme, root, task, and focus signatures were checked agains
 the installed packages. The current upstream documentation has moved to GPUI
 Kit; examples from that newer API should not be copied without checking versions.
 
-The layout uses a quiet green and warm neutral palette, a flat balance band,
+The layout uses a shadcn-inspired neutral palette, rounded balance cards,
 an aligned movement ledger, and a focused form. It uses Segoe UI for interface
 text and headings, and Consolas for amounts. These fonts are
 available on the validation Windows host; other platforms may use GPUI font
@@ -25,11 +25,24 @@ mirror rather than upgrading the framework to follow current Kit examples.
 
 ## Component integration
 
+The shadcn inspiration is applied through the pinned GPUI Component theme API.
+`src/theme.rs` configures shared colors, control states, typography, and radius;
+buttons, inputs, selects, tabs, and switches use the native library's styling
+and interaction behavior. Shared card surfaces use the current GPUI theme.
+Page text and borders use the same neutral palette, while success and error
+feedback retain distinct semantic colors.
+
+The reference is Ghostex's [shadcn configuration](https://github.com/maddada/Ghostex/blob/main/components.json)
+and [light settings palette](https://github.com/maddada/Ghostex/blob/main/packages/core-ui/styles/shadcn.css).
+This is a native styling adaptation. It requires no React, Tailwind, new
+dependencies, or GPUI package upgrade. Keep new controls on the existing
+component library and use the shared theme for custom surfaces.
+
 | Component | Application use |
 | --- | --- |
 | Form / Field / Input | Consistent field labels and spacing across sign-in, setup, cash entry, and reports |
 | GroupBox | Company, cash handling, and printing groups during first-run setup |
-| Accordion | Expandable settings sections; expansion survives edits and saves |
+| Settings / SettingPage / SettingGroup / SettingItem | Searchable settings navigation and grouped preferences |
 | Select | A4/Letter paper selection and a searchable report-register selector |
 | TabBar / Tab | Cash register, Reports, and Settings navigation with an active-page indicator |
 | Switch | Automatic-update preference, using the existing persistence and failure handling |
@@ -38,9 +51,10 @@ mirror rather than upgrading the framework to follow current Kit examples.
 | Icon / Button | Embedded icons for actions and register identity |
 | Alert | Errors, successful saves, and update feedback |
 
-Settings validation expands every section so invalid fields remain reachable.
-The paper selector accepts only A4 or Letter and participates in the updater's
-unsaved-work check. Report registers are identified by database ID, so repeated
+Settings validation opens the relevant page so invalid fields remain reachable.
+The paper selector and backup preferences participate in the updater's
+unsaved-work check. The paper selector accepts only A4 or Letter.
+Report registers are identified by database ID, so repeated
 names do not select the wrong register. Sign-out clears the selector's contents.
 
 Report shortcuts select Today, Last 7 days (today plus the preceding six days),
