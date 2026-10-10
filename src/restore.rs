@@ -22,6 +22,56 @@ pub struct RestoreSummary {
     pub restored_from: PathBuf,
 }
 
+/// Read-only confirmation details for a selected backup.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RestorePreview {
+    pub backup: PathBuf,
+    pub size_bytes: u64,
+    pub modified_unix_nanos: u128,
+    pub sha256: String,
+}
+
+/// Resolves and fully validates a backup without changing the live ledger.
+pub fn preview_restore(live: &Path, selection: &Path) -> Result<RestorePreview, String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let backup = resolve_backup(selection, live)?;
+    let metadata = std::fs::metadata(&backup).map_err(|e| format!("Cannot inspect backup: {e}"))?;
+    if metadata.len() > 2 * 1024 * 1024 * 1024 {
+        return Err("Selected backup exceeds the 2 GiB restore limit".into());
+    }
+    let modified_unix_nanos = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let connection = Connection::open_with_flags(&backup, OpenFlags::SQLITE_OPEN_READ_ONLY)
+        .map_err(|e| format!("Cannot open selected backup: {e}"))?;
+    validate_database(&connection, Instant::now())?;
+    drop(connection);
+    let mut file =
+        std::fs::File::open(&backup).map_err(|e| format!("Cannot read selected backup: {e}"))?;
+    let mut hash = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let count = file
+            .read(&mut buffer)
+            .map_err(|e| format!("Cannot read selected backup: {e}"))?;
+        if count == 0 {
+            break;
+        }
+        hash.update(&buffer[..count]);
+    }
+    let sha256 = format!("{:x}", hash.finalize());
+    Ok(RestorePreview {
+        backup,
+        size_bytes: metadata.len(),
+        modified_unix_nanos,
+        sha256,
+    })
+}
+
 #[derive(Clone)]
 struct BackupState {
     directory: Option<String>,

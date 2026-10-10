@@ -1,4 +1,5 @@
 //! Verified GitHub release downloads and an installer handoff for installed Windows apps.
+pub mod preferences;
 use reqwest::blocking::Client;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -193,12 +194,16 @@ pub fn verify_file(path: &Path, expected: &str, size: u64) -> Result<(), String>
 }
 
 fn installed_executable() -> Result<PathBuf, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    validate_installed_executable(&exe)
+}
+
+/// Verify the installed desktop target before a local integration can update it.
+pub fn validate_installed_executable(path: &Path) -> Result<PathBuf, String> {
     if !cfg!(all(target_os = "windows", target_arch = "x86_64")) {
         return Err("Updates require an installed Windows x64 app".into());
     }
-    let exe = std::env::current_exe()
-        .and_then(fs::canonicalize)
-        .map_err(|e| e.to_string())?;
+    let exe = fs::canonicalize(path).map_err(|e| e.to_string())?;
     if exe
         .file_name()
         .is_none_or(|name| name != "cash-counter.exe")
@@ -224,6 +229,16 @@ pub fn is_installed() -> bool {
 /// Start the helper before the UI exits. The helper waits for this exact process handle.
 pub fn launch_update(update: &PreparedUpdate) -> Result<(), String> {
     let exe = installed_executable()?;
+    launch_update_for_executable(update, &exe)
+}
+
+/// Hand off to the desktop helper; the caller must flush its response and exit.
+/// The installer refuses to replace a desktop application that is still open.
+pub fn launch_update_for_executable(
+    update: &PreparedUpdate,
+    executable_path: &Path,
+) -> Result<(), String> {
+    let exe = validate_installed_executable(executable_path)?;
     verify_file(&update.installer, &update.sha256, update.size)?;
     // A separate helper copy releases the installed executable before Setup replaces it.
     let helper = update
@@ -516,6 +531,27 @@ pub fn hold_app_mutex() -> Result<AppPresence, String> {
 #[cfg(test)]
 mod tests {
     use super::{APP_ID, APP_MUTEX, MARKER};
+
+    #[test]
+    fn external_update_target_requires_the_desktop_installation_identity() {
+        let directory = tempfile::tempdir().unwrap();
+        let desktop = directory.path().join("cash-counter.exe");
+        let server = directory.path().join("cash-ledger-mcp.exe");
+        std::fs::write(&desktop, b"test target; never executed").unwrap();
+        std::fs::write(&server, b"test target; never executed").unwrap();
+        assert!(super::validate_installed_executable(&desktop).is_err());
+        std::fs::write(directory.path().join(MARKER), format!("AppId={APP_ID}\n")).unwrap();
+        assert!(super::validate_installed_executable(&desktop).is_err());
+        std::fs::write(directory.path().join("unins000.exe"), b"test uninstaller").unwrap();
+        assert!(super::validate_installed_executable(&server).is_err());
+        #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
+        assert_eq!(
+            super::validate_installed_executable(&desktop).unwrap(),
+            desktop.canonicalize().unwrap()
+        );
+        std::fs::write(directory.path().join(MARKER), "AppId=another-app\n").unwrap();
+        assert!(super::validate_installed_executable(&desktop).is_err());
+    }
 
     #[cfg(windows)]
     #[test]

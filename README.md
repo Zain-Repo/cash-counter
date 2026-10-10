@@ -117,6 +117,7 @@ See [the release guide](docs/releases.md) for the versioning procedure.
 
 ## Documentation
 
+- [Local Codex plugin](docs/plugin.md)
 - [Storage API and database invariants](docs/database.md)
 - [Workspace behavior and known limitations](docs/ui.md)
 - [Company setup, sign-in, settings, reports and printing](docs/company-and-reports.md)

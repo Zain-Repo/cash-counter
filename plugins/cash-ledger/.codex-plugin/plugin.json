@@ -1,0 +1,30 @@
+{
+    "name":  "cash-ledger",
+    "version":  "0.1.0",
+    "description":  "Manage the local Cash Ledger application through its authenticated Rust services.",
+    "author":  {
+                   "name":  "Cash Ledger"
+               },
+    "repository":  "https://github.com/Zain-Repo/cash-counter",
+    "license":  "MIT",
+    "skills":  "./skills/",
+    "mcpServers":  "./.mcp.json",
+    "interface":  {
+                      "displayName":  "Cash Ledger",
+                      "shortDescription":  "Manage your local cash ledger",
+                      "longDescription":  "Sign in to your local Cash Ledger database to manage registers, cash movements, reconciliation, company settings, reports, analytics, backups, restore, and application updates.",
+                      "developerName":  "Cash Ledger",
+                      "category":  "Productivity",
+                      "capabilities":  [
+                                           "Read",
+                                           "Write"
+                                       ],
+                      "defaultPrompt":  [
+                                            "Show my registers and balances.",
+                                            "Prepare a cash ledger report.",
+                                            "Review my backup settings."
+                                        ],
+                      "logo":  "./assets/till.png",
+                      "composerIcon":  "./assets/till.png"
+                  }
+}

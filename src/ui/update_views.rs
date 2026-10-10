@@ -1,10 +1,12 @@
 //! Update tasks have an independent lifecycle so checking never cancels ledger writes.
 
 use super::*;
+use cash_counter::updater::preferences::{
+    read_preference, update_preference_path, write_preference,
+};
 use cash_counter::updater::{self, AvailableUpdate, PreparedUpdate};
 use gpui_component::{alert::Alert, v_flex};
-use serde::{Deserialize, Serialize};
-use std::{io::Write, path::Path, time::Duration};
+use std::time::Duration;
 
 pub(super) struct Updates {
     pub enabled: bool,
@@ -38,68 +40,6 @@ impl Default for Updates {
             preference_path: update_preference_path(),
         }
     }
-}
-
-#[derive(Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct UpdatePreference {
-    automatic: bool,
-}
-
-fn update_preference_path() -> Result<PathBuf, String> {
-    // Retain the established storage namespace when the product display name changes.
-    directories::ProjectDirs::from("ca", "Local", "Cash Register")
-        .map(|directories| directories.data_local_dir().join("updates.json"))
-        .ok_or_else(|| "Could not find the update preferences directory.".into())
-}
-
-fn read_preference(path: &Path) -> Result<bool, String> {
-    match std::fs::metadata(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
-        Err(_) => {
-            return Err(
-                "Could not read update preferences. Automatic installation is paused.".into(),
-            );
-        }
-        Ok(metadata) if metadata.len() > 4096 => {
-            return Err(
-                "Update preferences are invalid. Choose your update preference again.".into(),
-            );
-        }
-        Ok(_) => {}
-    }
-    let bytes = std::fs::read(path)
-        .map_err(|_| "Could not read update preferences. Automatic installation is paused.")?;
-    serde_json::from_slice::<UpdatePreference>(&bytes)
-        .map(|preference| preference.automatic)
-        .map_err(|_| "Update preferences are invalid. Choose your update preference again.".into())
-}
-
-fn write_preference(path: &Path, automatic: bool) -> Result<(), String> {
-    let parent = path
-        .parent()
-        .ok_or("The update preferences path is invalid.")?;
-    std::fs::create_dir_all(parent).map_err(|_| "Could not save update preferences.")?;
-    let temporary = parent.join(format!("updates-{}.tmp", uuid::Uuid::new_v4()));
-    let result = (|| {
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary)
-            .map_err(|_| "Could not save update preferences.")?;
-        let bytes = serde_json::to_vec(&UpdatePreference { automatic })
-            .map_err(|_| "Could not save update preferences.")?;
-        file.write_all(&bytes)
-            .and_then(|_| file.sync_all())
-            .map_err(|_| "Could not save update preferences.")?;
-        drop(file);
-        std::fs::rename(&temporary, path).map_err(|_| "Could not save update preferences.")?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(&temporary);
-    }
-    result.map_err(str::to_string)
 }
 
 /// A restart must never interrupt a write, a failed retry payload, or an unsaved draft.

@@ -4,6 +4,8 @@ pub mod backup;
 pub mod backup_service;
 pub mod company;
 pub mod database;
+pub mod paths;
+pub mod plugin;
 pub mod register;
 pub mod reporting;
 pub mod restore;
