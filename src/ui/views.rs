@@ -34,6 +34,17 @@ impl Render for RegisterApp {
                 .into_any_element();
         }
         if self.page != Page::Register {
+            if self.page == Page::Dashboard {
+                return v_flex()
+                    .size_full()
+                    .bg(rgb(CANVAS))
+                    .font_family("Segoe UI")
+                    .text_color(rgb(INK))
+                    .child(self.navigation(cx))
+                    .child(self.update_banner())
+                    .child(self.dashboard_view(window, cx))
+                    .into_any_element();
+            }
             let page = if self.page == Page::Settings {
                 self.settings_view(cx)
             } else {

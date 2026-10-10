@@ -281,7 +281,7 @@ impl RegisterApp {
 
     pub(super) fn can_restart_for_update(&self, cx: &App) -> bool {
         restart_is_safe(
-            self.busy || self.updates.working,
+            self.busy || self.updates.working || self.backup_working,
             self.failed_operation.is_some(),
             self.has_update_draft(cx),
             self.updates.installing,

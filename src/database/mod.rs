@@ -296,16 +296,18 @@ impl Database {
             0 => {
                 transaction.execute_batch(include_str!("migrations/001_cash_register.sql"))?;
                 transaction.execute_batch(include_str!("migrations/002_session_history.sql"))?;
-                transaction.pragma_update(None, "user_version", 2)?;
             }
             1 => {
                 transaction.execute_batch(include_str!("migrations/002_session_history.sql"))?;
-                transaction.pragma_update(None, "user_version", 2)?;
             }
-            2 => {}
+            2 | 3 => {}
             _ => {
                 return Err(Error::UnsupportedSchema(version));
             }
+        }
+        if version <= 2 {
+            transaction.execute_batch(include_str!("migrations/003_dashboard_dates.sql"))?;
+            transaction.pragma_update(None, "user_version", 3)?;
         }
         transaction.commit()?;
         Ok(Self { connection })

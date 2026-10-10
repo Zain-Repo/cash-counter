@@ -9,7 +9,17 @@ fn date_filter_reconciliation_and_csv_safety() {
     let register = db.create_register("=Danger, \"Desk\"", "CAD").unwrap();
     let other = db.create_register("Other", "USD").unwrap();
     let session = db.open_session(register, "2026-10-09", 1000).unwrap();
-    db.open_session(other, "2026-10-09", 500).unwrap();
+    let other_session = db.open_session(other, "2026-10-09", 500).unwrap();
+    db.record_entries(
+        other_session,
+        &[NewEntry {
+            direction: Direction::In,
+            amount: 900,
+            reason: "Excluded register",
+            request_key: "excluded-register",
+        }],
+    )
+    .unwrap();
     db.record_entries(
         session,
         &[
@@ -48,12 +58,88 @@ fn date_filter_reconciliation_and_csv_safety() {
         (250, 100, 1150, Some(-50))
     );
     let csv = result.to_csv();
+    let mut streamed = Vec::new();
+    result.write_csv(&mut streamed).unwrap();
+    assert_eq!(streamed, csv.as_bytes());
     assert!(csv.contains("\"'=Danger, \"\"Desk\"\"\""));
     assert!(csv.contains("\"'\t=FORMULA\nquoted \"\"value\"\"\""));
     let printable = result.printable("Company\nName");
     assert!(printable.contains("Company Name"));
     assert!(printable.contains("Expected 11.50"));
     assert!(printable.contains("Difference -0.50"));
+}
+
+#[test]
+fn report_excludes_movements_outside_business_date_bounds() {
+    let mut db = Database::in_memory().unwrap();
+    let register = db.create_register("Desk", "CAD").unwrap();
+    let earlier = db.open_session(register, "2026-10-08", 0).unwrap();
+    db.record_entries(
+        earlier,
+        &[NewEntry {
+            direction: Direction::In,
+            amount: 100,
+            reason: "Previous day",
+            request_key: "earlier-day",
+        }],
+    )
+    .unwrap();
+    db.close_session(earlier, 100).unwrap();
+    let current = db.open_session(register, "2026-10-09", 100).unwrap();
+    db.record_entries(
+        current,
+        &[NewEntry {
+            direction: Direction::Out,
+            amount: 50,
+            reason: "Current day",
+            request_key: "current-day",
+        }],
+    )
+    .unwrap();
+    let result = report(
+        &db,
+        &ReportFilter {
+            start_date: "2026-10-09".into(),
+            end_date: "2026-10-09".into(),
+            register_id: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        result
+            .movements
+            .iter()
+            .map(|m| m.session_id)
+            .collect::<Vec<_>>(),
+        vec![current]
+    );
+}
+
+#[test]
+fn streaming_csv_propagates_destination_errors() {
+    struct FailedDestination;
+    impl std::io::Write for FailedDestination {
+        fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
+            Err(std::io::ErrorKind::StorageFull.into())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let db = Database::in_memory().unwrap();
+    let result = report(
+        &db,
+        &ReportFilter {
+            start_date: "2026-10-09".into(),
+            end_date: "2026-10-09".into(),
+            register_id: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        result.write_csv(&mut FailedDestination).unwrap_err().kind(),
+        std::io::ErrorKind::StorageFull
+    );
 }
 
 #[test]

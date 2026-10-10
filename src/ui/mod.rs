@@ -2,6 +2,7 @@
 
 mod company_views;
 mod components;
+mod dashboard_views;
 #[cfg(test)]
 mod tests;
 mod update_views;
@@ -40,6 +41,11 @@ pub struct RegisterApp {
     access: Access,
     access_scroll: ScrollHandle,
     page: Page,
+    dashboard: dashboard_views::Dashboard,
+    dashboard_task: Option<Task<()>>,
+    dashboard_timer: Option<Task<()>>,
+    backup_task: Option<Task<()>>,
+    backup_working: bool,
     profile: Option<cash_counter::company::CompanyProfile>,
     company: Entity<InputState>,
     address: Entity<InputState>,
@@ -96,6 +102,11 @@ impl RegisterApp {
             access_scroll: ScrollHandle::default(),
             access: Access::Loading,
             page: Page::Register,
+            dashboard: dashboard_views::Dashboard::default(),
+            dashboard_task: None,
+            dashboard_timer: None,
+            backup_task: None,
+            backup_working: false,
             profile: None,
             company: cx.new(|cx| InputState::new(window, cx).placeholder("Company name")),
             address: cx.new(|cx| InputState::new(window, cx).placeholder("Address (optional)")),

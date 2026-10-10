@@ -122,7 +122,11 @@ pub fn export_csv(
         .open(&temporary)
         .map_err(Error::Export)?;
     let write = || -> std::io::Result<()> {
-        file.write_all(report.to_csv().as_bytes())?;
+        // Buffer small writes without allocating a second copy of the complete report.
+        let mut buffered = std::io::BufWriter::new(&mut file);
+        report.write_csv(&mut buffered)?;
+        buffered.flush()?;
+        drop(buffered);
         file.sync_all()?;
         drop(file);
         // Same-directory rename atomically replaces the file, never its contents.
@@ -207,8 +211,27 @@ pub fn report(db: &Database, filter: &ReportFilter) -> Result<Report> {
             )?
             .collect::<rusqlite::Result<Vec<_>>>()?
     };
+    if sessions.len() > 10000 {
+        return Err(Error::InvalidInput(
+            "Report is too large; select a shorter date range",
+        ));
+    }
     let movements = {
-        let mut statement=transaction.prepare("SELECT m.session_id,m.direction,m.amount,m.reason,m.created_at FROM (SELECT session_id,'In' direction,amount,reason,created_at,id FROM cash_in UNION ALL SELECT session_id,'Out',amount,reason,created_at,id FROM cash_out) m JOIN register_sessions s ON s.id=m.session_id WHERE s.business_date BETWEEN ?1 AND ?2 AND (?3 IS NULL OR s.register_id=?3) ORDER BY s.business_date,m.session_id,m.created_at,m.direction,m.id LIMIT 100001")?;
+        // Filter sessions before combining movements so unrelated ledger detail
+        // does not have to be materialized by the UNION query.
+        let mut statement = transaction.prepare(
+            "WITH selected_sessions AS (
+                SELECT id,business_date FROM register_sessions
+                WHERE business_date BETWEEN ?1 AND ?2 AND (?3 IS NULL OR register_id=?3)
+            ), movements AS (
+                SELECT m.session_id,'In' direction,m.amount,m.reason,m.created_at,m.id,s.business_date
+                FROM selected_sessions s JOIN cash_in m ON m.session_id=s.id
+                UNION ALL
+                SELECT m.session_id,'Out',m.amount,m.reason,m.created_at,m.id,s.business_date
+                FROM selected_sessions s JOIN cash_out m ON m.session_id=s.id
+            ) SELECT session_id,direction,amount,reason,created_at FROM movements
+            ORDER BY business_date,session_id,created_at,direction,id LIMIT 100001",
+        )?;
         statement
             .query_map(
                 params![filter.start_date, filter.end_date, filter.register_id],
@@ -224,7 +247,7 @@ pub fn report(db: &Database, filter: &ReportFilter) -> Result<Report> {
             )?
             .collect::<rusqlite::Result<Vec<_>>>()?
     };
-    if sessions.len() > 10000 || movements.len() > 100000 {
+    if movements.len() > 100000 {
         return Err(Error::InvalidInput(
             "Report is too large; select a shorter date range",
         ));
@@ -250,9 +273,29 @@ fn csv_text(value: &str) -> String {
 impl Report {
     /// Values are exact minor units; currency remains per session, never combined.
     pub fn to_csv(&self) -> String {
-        let mut result="session_id,register,currency,business_date,opening_minor,cash_in_minor,cash_out_minor,expected_minor,counted_minor,difference_minor\r\n".to_string();
+        let mut result = String::new();
+        self.append_csv(|row| {
+            result.push_str(row);
+            Ok(())
+        })
+        .unwrap_or_else(|never: std::convert::Infallible| match never {});
+        result
+    }
+
+    /// Streams complete CSV rows and propagates destination write failures.
+    pub fn write_csv(&self, writer: &mut impl std::io::Write) -> std::io::Result<()> {
+        self.append_csv(|row| writer.write_all(row.as_bytes()))
+    }
+
+    fn append_csv<E>(
+        &self,
+        mut append: impl FnMut(&str) -> std::result::Result<(), E>,
+    ) -> std::result::Result<(), E> {
+        append(
+            "session_id,register,currency,business_date,opening_minor,cash_in_minor,cash_out_minor,expected_minor,counted_minor,difference_minor\r\n",
+        )?;
         for s in &self.sessions {
-            result.push_str(&format!(
+            append(&format!(
                 "{},{},{},{},{},{},{},{},{},{}\r\n",
                 s.id,
                 csv_text(&s.register_name),
@@ -264,20 +307,20 @@ impl Report {
                 s.expected,
                 s.counted.map(|n| n.to_string()).unwrap_or_default(),
                 s.difference.map(|n| n.to_string()).unwrap_or_default()
-            ));
+            ))?;
         }
-        result.push_str("\r\nsession_id,direction,amount_minor,reason,created_at_utc\r\n");
+        append("\r\nsession_id,direction,amount_minor,reason,created_at_utc\r\n")?;
         for m in &self.movements {
-            result.push_str(&format!(
+            append(&format!(
                 "{},{},{},{},{}\r\n",
                 m.session_id,
                 csv_text(&m.direction),
                 m.amount,
                 csv_text(&m.reason),
                 csv_text(&m.created_at)
-            ));
+            ))?;
         }
-        result
+        Ok(())
     }
     pub fn printable(&self, company_name: &str) -> String {
         let mut text = format!(

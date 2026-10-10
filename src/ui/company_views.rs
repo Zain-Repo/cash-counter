@@ -27,6 +27,7 @@ pub(super) enum Access {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Page {
     Register,
+    Dashboard,
     Settings,
     Reports,
 }
@@ -274,10 +275,11 @@ impl RegisterApp {
     }
 
     pub(super) fn logout(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy || self.failed_operation.is_some() {
+        if self.busy || self.backup_working || self.failed_operation.is_some() {
             return;
         }
         self.access = Access::Login;
+        self.clear_dashboard();
         self.page = Page::Register;
         self.snapshot = None;
         self.report_register = None;
@@ -558,6 +560,7 @@ impl RegisterApp {
                         Page::Register => 0,
                         Page::Reports => 1,
                         Page::Settings => 2,
+                        Page::Dashboard => 3,
                     })
                     .child(Tab::new().label("Cash register").disabled(self.busy))
                     .child(
@@ -570,11 +573,17 @@ impl RegisterApp {
                             .label("Settings")
                             .disabled(self.busy || self.failed_operation.is_some()),
                     )
+                    .child(
+                        Tab::new()
+                            .label("Live dashboard")
+                            .disabled(self.busy || self.failed_operation.is_some()),
+                    )
                     .on_click(cx.listener(|this, index: &usize, window, cx| {
                         let page = match index {
                             0 => Page::Register,
                             1 => Page::Reports,
                             2 => Page::Settings,
+                            3 => Page::Dashboard,
                             _ => return,
                         };
                         this.navigate(page, window, cx);
@@ -585,7 +594,7 @@ impl RegisterApp {
                     .label("Sign out")
                     .ghost()
                     .icon(IconName::ArrowRight)
-                    .disabled(self.busy || self.failed_operation.is_some())
+                    .disabled(self.busy || self.backup_working || self.failed_operation.is_some())
                     .on_click(cx.listener(|this, _, window, cx| this.logout(window, cx))),
             )
     }
@@ -599,6 +608,11 @@ impl RegisterApp {
             return;
         }
         self.page = page;
+        self.dashboard_timer = None;
+        self.dashboard.invalidate();
+        if page == Page::Dashboard {
+            self.refresh_dashboard(window, cx);
+        }
         self.error = None;
         self.notice = None;
         if page == Page::Settings {

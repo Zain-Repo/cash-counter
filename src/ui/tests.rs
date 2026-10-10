@@ -47,6 +47,51 @@ fn workspace(cx: &mut TestAppContext, path: PathBuf) -> (Entity<RegisterApp>, Vi
 }
 
 #[gpui::test]
+fn dashboard_logout_discards_background_results(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (app, mut visual) = workspace(cx, directory.path().join("dashboard-logout.sqlite3"));
+    app.update_in(&mut visual, |app, window, cx| {
+        app.navigate(Page::Dashboard, window, cx);
+        assert!(app.dashboard.working);
+        let generation = app.dashboard.generation;
+        app.logout(window, cx);
+        assert!(app.dashboard.generation > generation);
+        assert!(app.dashboard.data.is_none());
+        assert!(app.dashboard_timer.is_none());
+    });
+    visual.run_until_parked();
+    app.update_in(&mut visual, |app, _, _| {
+        assert!(app.access == Access::Login);
+        assert!(!app.dashboard.working);
+        assert!(app.dashboard.data.is_none());
+        assert!(app.dashboard_timer.is_none());
+    });
+}
+
+#[gpui::test]
+fn dashboard_navigation_cancels_refresh_and_backup_blocks_restart(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let (app, mut visual) = workspace(cx, directory.path().join("dashboard-navigation.sqlite3"));
+    app.update_in(&mut visual, |app, window, cx| {
+        app.navigate(Page::Dashboard, window, cx)
+    });
+    visual.run_until_parked();
+    app.update_in(&mut visual, |app, window, cx| {
+        assert!(app.dashboard.data.is_some());
+        assert!(app.dashboard_timer.is_some());
+        app.navigate(Page::Register, window, cx);
+        assert!(app.dashboard_timer.is_none());
+        app.backup_working = true;
+        assert!(!app.can_restart_for_update(cx));
+        app.logout(window, cx);
+        assert!(app.access == Access::Authenticated);
+        app.backup_working = false;
+        app.logout(window, cx);
+        assert!(app.dashboard.data.is_none());
+    });
+}
+
+#[gpui::test]
 fn enter_signs_in_from_either_login_field(cx: &mut TestAppContext) {
     let directory = tempfile::tempdir().unwrap();
     let (app, mut cx) = workspace(cx, directory.path().join("enter-login.sqlite3"));

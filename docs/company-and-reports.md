@@ -28,6 +28,31 @@ rules are guidance for staff. The numerical tolerance warns during closing
 review; the operator can still explicitly confirm the reconciled count.
 Amounts and registers continue to use CAD with two decimal places.
 
+## Live dashboard and backups
+
+The Dashboard shows CAD activity across registers for the last 7, 30, 90, or 365
+inclusive business dates. It includes incoming and outgoing totals, net movement,
+movement counts, open days, daily net-flow and register charts, and the twenty
+largest closing count differences. Opening cash is not revenue; net movement is
+cash received minus cash paid out. Closing differences are signed and can offset
+each other in the summary.
+
+Analytics use an independent read-only connection and a consistent snapshot.
+Only aggregate chart points and bounded detail lists return to the UI. Refresh
+runs in the background every fifteen seconds after the previous read completes
+while the dashboard is active and signed in. Query timing describes that read,
+not a guarantee for all database sizes. Queries have a ten-second execution
+deadline and a two-second lock timeout. Errors preserve the previous snapshot.
+
+Save verified backup saves a consistent online SQLite snapshot, including committed
+records in the WAL. Choose a new filename: existing destinations and SQLite
+sidecars are rejected. A temporary snapshot is checked for integrity before
+publication. Backups contain company credentials and financial data; store them
+with appropriate access restrictions. Backup scheduling, encryption, and an
+in-app restore workflow are not implemented.
+
+The isolated synthetic workload example is described in [Performance testing](performance.md).
+
 ## Reports and printing
 
 Reports select an inclusive range of business dates and optionally a register.

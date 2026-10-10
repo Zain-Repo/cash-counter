@@ -21,6 +21,9 @@ movements, and reconcile the physical count before closing.
 - Set up a company profile and local administrator account, then sign in before
   accessing the register workspace.
 - Configure company rules and printing, and generate date-range ledger reports.
+- View live cash-flow charts, register rankings, and closing discrepancies with
+  bounded background refreshes and query timing.
+- Save a verified online backup without closing the application.
 
 ## Install on Windows
 
@@ -59,7 +62,8 @@ Closing requires the explicit review stage. Closed days are read-only.
 Data stays on the local machine. On Windows, the default database is
 `%LOCALAPPDATA%/Cash Register/data/register.sqlite3`; see the
 [UI guide](docs/ui.md) for persistence and concurrency behavior.
-Back up the database when the application is closed.
+Use the dashboard backup action for a consistent online snapshot. For manual
+file copies, back up the database when the application is closed.
 For development smoke tests, `CASH_REGISTER_DB` can point to an isolated database.
 
 The initial version supports CAD with two decimal places. Multi-currency setup,

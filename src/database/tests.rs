@@ -87,7 +87,7 @@ fn migration_is_atomic_on_failure() {
 #[test]
 fn rejects_future_schema() {
     let connection = Connection::open_in_memory().unwrap();
-    connection.pragma_update(None, "user_version", 3).unwrap();
+    connection.pragma_update(None, "user_version", 4).unwrap();
     assert!(Database::initialize(connection).is_err());
 }
 

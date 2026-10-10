@@ -66,16 +66,19 @@ memory journal. A connection is private to its owner. Run this synchronous API
 on a worker thread when integrating with GPUI. A timeout returns an error; the
 caller can retry using the original request keys.
 
-`PRAGMA user_version` tracks migration version 2. Migration 002 adds the
-`(register_id, id)` index for daily-session history. Schema changes and the version
+`PRAGMA user_version` tracks migration version 3. Migration 002 adds the
+`(register_id, id)` index for daily-session history; migration 003 adds
+`(business_date, register_id)` for dashboard and report date ranges. Schema changes and the version
 update commit atomically under an immediate transaction. Opening an existing
-version-1 database upgrades it without changing records; newer versions are rejected. Only use paths
+version-1 or version-2 database upgrades it without changing records; newer versions are rejected. Only use paths
 owned by this application. There is no destructive downgrade operation. Failed
 migrations roll back; deployment recovery should restore a verified backup using
 a compatible application version, rather than deleting financial records.
 
 SQLite files are not encrypted. Store them in a user-private application-data
-directory with appropriate OS permissions. For backups, close all connections
+directory with appropriate OS permissions. The dashboard's Save verified backup action
+uses SQLite online backup, includes committed WAL records, verifies integrity,
+and publishes to a new destination without replacing existing files. For manual copies, close all connections
 before copying the database and any remaining WAL files as a consistent set, or
 use SQLite's online backup tooling. Do not copy only the main file while writers
 are active. Backup scheduling and encryption are not implemented in this phase.
